@@ -54,3 +54,31 @@ def test_drift_measurement_runs_and_reports_ci(backend: str, tmp_path: Path, pep
             f"{backend}: drift {res['drift']:.4f} [{res['drift_ci_low']:.4f},{res['drift_ci_high']:.4f}] control {res['control']:.4f} above={res['above_control']}"
         )
     store.close()
+
+
+@pytest.mark.parametrize("backend", ["chroma", "faiss"])
+def test_drift_probe_is_deterministic(backend: str, tmp_path: Path, pepper: bytes) -> None:
+    """Hard Rule 9: the same store and seed must give the same control set every time."""
+    _stores.skip_unless(backend)
+    store = _stores.make_backend(backend, tmp_path)
+    emb = _stores.embedder()
+    docs = _stores.stamped_docs(pepper, n_subjects=6, per_subject=2)
+    with _stores.lineage_and_capture(tmp_path) as (_lineage, capture):
+        texts = [x for x, _ in docs]
+        recs = capture.prepare_embeds(
+            store.name,
+            emb.name,
+            [f"k{i}" for i in range(len(docs))],
+            emb.embed(texts),
+            [m for _, m in docs],
+            texts,
+        )
+        store.add(recs)
+        target = recs[0].embed_node.ref()
+        runs = []
+        for _ in range(3):
+            probe = DriftProbe(store, budget=5, seed=1)
+            assert probe.record_before(target.store_key, [target.store_key])
+            runs.append(probe.before[target.store_key]["control_centroids"])
+        assert runs[0] == runs[1] == runs[2], "control set is not deterministic"
+    store.close()

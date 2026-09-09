@@ -3,18 +3,19 @@
 Credit: this is their measurement, reproduced on our corpus. We do not claim it as ours.
 
 Protocol, as implemented here:
-  1. Before deletion, for a target artifact, induce ``budget`` queries from its neighbourhood
-     (its own probe vectors plus small perturbations toward its nearest neighbours) and record
-     the Top-K (K=5) result set and its centroid (mean of the K result vectors).
-  2. Delete the target (the erasure does this). Re-run the same queries; compute the new
-     Top-K centroid excluding the target itself from the "before" set (so the drift measures
-     the neighbours' geometry, not the trivial loss of the target).
-  3. Control: pick a same-cluster non-target artifact (the target's nearest neighbour that is
-     not being erased), and measure the drift its deletion would cause using the same protocol
-     against a *shadow copy* of the neighbourhood: we cannot delete it, so the control is the
-     drift observed for the same queries with the control artifact excluded from the result
-     sets post hoc. This mirrors the paper's "same-cluster control".
-  4. Report drift, control, a bootstrap CI over the queries, and the query budget.
+  1. Before deletion, induce ``budget`` queries around the target (its own vector plus
+     perturbations toward its nearest neighbours) and record each query's Top-K (K=5) result
+     set and centroid — the target included, because that is what a user would have retrieved.
+  2. Delete the target (the erasure does this). Re-run the same queries and measure how far the
+     Top-K centroid moved. That is the drift.
+  3. Control, the paper's "same-cluster" arm: for each query, count how many Top-K slots the
+     subject occupied, and build the counterfactual in which that many of the *nearest
+     non-subject* entries had been deleted instead. Matching on slots vacated (not on vectors
+     deleted) is what makes the two arms comparable; matching on vector count lets the control
+     vacate more of the retrieved set than the erasure does, and the target then loses to its
+     own control by construction.
+  4. Report drift, control, a bootstrap CI over the queries, the query budget, and the mean
+     number of Top-K slots the subject held.
 
 RESIDUAL(semantic) when the drift CI excludes the control and drift > control. This level is
 reported, never blocks, and is never called proof that the content is present: it is a
@@ -82,6 +83,12 @@ def induce_queries(
     return out
 
 
+def topk_keys(
+    store: VectorBackendBase, query: Sequence[float], k: int, exclude: set[str]
+) -> list[str]:
+    return [h.key for h in store.query(query, k + len(exclude)) if h.key not in exclude][:k]
+
+
 def topk_vectors(
     store: VectorBackendBase, query: Sequence[float], k: int, exclude: set[str]
 ) -> list[list[float]]:
@@ -116,13 +123,15 @@ class DriftProbe:
 
     * **drift** — the Top-K centroid for an induced query *before* the deletion (the target
       included, exactly what a user would have retrieved) against the same query *after* it.
-    * **control** — the same "before" centroid against a counterfactual in which an equal number
-      of the target's nearest same-cluster *neighbours* had been deleted instead. This is what
-      any deletion of that size does to the neighbourhood; drift above it is the subject's own
-      trace.
+    * **control** — the same "before" centroid against a counterfactual in which the same number
+      of Top-K *slots* had been vacated by deleting nearest non-subject entries instead. That is
+      what any deletion of that size does to the neighbourhood; drift above it is the subject's
+      own trace.
 
-    Excluding the target from the "before" set makes both arms identical and the measurement
-    always zero; that was the first implementation here and it is why this docstring exists.
+    Two ways to get a meaningless answer here, both of which this code hit first and now guards
+    against: excluding the target from the "before" set makes both arms identical and every
+    measurement exactly zero; matching the control on vectors deleted rather than slots vacated
+    makes the control the larger perturbation and the target lose by construction.
     """
 
     def __init__(self, store: VectorBackendBase, budget: int = 5, seed: int = 0) -> None:
@@ -132,25 +141,37 @@ class DriftProbe:
         self.before: dict[str, dict[str, Any]] = {}
 
     def record_before(self, key: str, deleted_keys: Sequence[str] | None = None) -> bool:
-        """``key`` anchors the queries; ``deleted_keys`` is everything the erasure will remove
-        (defaults to just ``key``), so the control can delete the same number of neighbours."""
+        """``key`` anchors the queries; ``deleted_keys`` is everything the erasure will remove.
+
+        The control is matched **per query, by slots vacated**: for each induced query, count how
+        many of its Top-K the subject occupies, then build the counterfactual in which that many
+        of the *nearest non-subject* entries had been deleted instead. Matching on the number of
+        deleted vectors instead would let the control vacate more Top-K slots than the erasure
+        does, and the target would lose to its own control by construction.
+        """
         vec = self.store._vector_of(key)
         if vec is None:
             return False
         targets = set(deleted_keys or [key])
         queries = induce_queries(self.store, vec, self.budget, self.seed)
-        # matched same-cluster control: the |targets| nearest vectors that are not the subject's
-        neighbours = [
-            h.key for h in self.store.query(vec, K + len(targets) + 5) if h.key not in targets
-        ]
-        control_keys = set(neighbours[: len(targets)])
-        before = [_centroid(topk_vectors(self.store, q, K, set())) for q in queries]
-        control = [_centroid(topk_vectors(self.store, q, K, control_keys)) for q in queries]
+        before: list[list[float]] = []
+        control: list[list[float]] = []
+        vacated: list[int] = []
+        for q in queries:
+            keys_before = topk_keys(self.store, q, K, set())
+            before.append(
+                _centroid([v for v in (self.store._vector_of(k) for k in keys_before) if v])
+            )
+            m = sum(1 for k in keys_before if k in targets)
+            vacated.append(m)
+            # rank order, not set order: the control must be identical on every run (Hard Rule 9)
+            drop = {k for k in [k for k in keys_before if k not in targets][:m]}
+            control.append(_centroid(topk_vectors(self.store, q, K, drop)))
         self.before[key] = {
             "queries": queries,
             "centroids": before,
             "control_centroids": control,
-            "control_keys": sorted(control_keys),
+            "slots_vacated": vacated,
             "targets": sorted(targets),
         }
         return True
@@ -167,6 +188,7 @@ class DriftProbe:
             after_c = _centroid(topk_vectors(self.store, q, K, set()))
             drifts.append(_dist(c_before, after_c))
             controls.append(_dist(c_before, c_control))
+        slots = b.get("slots_vacated") or [0]
         d_mean, d_lo, d_hi = bootstrap_mean(drifts, seed=self.seed)
         c_mean, c_lo, c_hi = bootstrap_mean(controls, seed=self.seed + 1)
         above = d_mean > c_mean and not (d_lo <= c_mean <= d_hi)
@@ -178,6 +200,7 @@ class DriftProbe:
             "control_ci_low": c_lo,
             "control_ci_high": c_hi,
             "query_budget": float(self.budget),
+            "slots_vacated_mean": sum(slots) / max(1, len(slots)),
             "above_control": 1.0 if above else 0.0,
         }
 

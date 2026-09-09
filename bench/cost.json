@@ -72,8 +72,13 @@
    "key": "attacks-bench",
    "seconds": 99.4,
    "when": "20260909T151948"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 800.2,
+   "when": "20260909T161642"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 3.106
+ "total_cpu_hours": 3.329
 }
