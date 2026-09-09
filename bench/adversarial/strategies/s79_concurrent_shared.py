@@ -36,7 +36,29 @@ def run(n_subjects: int) -> dict[str, Any]:
             Doc(f"{b}-shared", b, f"support/{b}/shared.txt", shared_text, (), None, 0),
         ]
         p = Pipeline(WORK / "attacks" / f"s79-{trial}")
-        p.ingest(own_a + own_b + shared, capture=True)
+        p.ingest(own_a + own_b, capture=True)
+        # a genuinely shared chunk: one CHUNK node under both subjects (explicit chunk id)
+        from tombstone.lineage.stamp import K_CHUNK, stamp
+        from tombstone.util import derived_ulid
+
+        shared_id = derived_ulid("shared", str(trial))
+        for d in shared:
+            md = stamp(
+                {"source": d.source, K_CHUNK: shared_id},
+                d.subject,
+                d.source,
+                "default",
+                pepper=p.pepper,
+            )
+            src = p.capture.ensure_source(md, d.text)
+            p.docstore.put(src.artifact_id, "source", d.text, md)  # type: ignore[attr-defined]
+            key = f"{d.doc_id}#0"
+            p.keys_by_doc.setdefault(d.doc_id, []).append(key)
+            p.store.add(
+                p.capture.prepare_embeds(
+                    p.store.name, p.emb.name, [key], p.emb.embed([d.text]), [md], [d.text]
+                )
+            )
         ta, _ = run_trace(p.rt, a, with_store_gaps=False)
         tb, _ = run_trace(p.rt, b, with_store_gaps=False)
         assert ta.shared and tb.shared, "the shared chunk must be flagged on both traces"

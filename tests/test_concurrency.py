@@ -96,6 +96,8 @@ def test_shared_chunks_final_state_is_set_difference(
         "B": [f"only B text {i}" for i in range(3)],
         "C": [f"only C text {i}" for i in range(2)],
     }
+    from tombstone.util import derived_ulid
+
     for s, texts in own.items():
         docs = [
             stamp(
@@ -105,9 +107,23 @@ def test_shared_chunks_final_state_is_set_difference(
                 "default",
                 pepper=pepper,
             )
-            for i, t in enumerate(texts + (shared_texts if s in {"A", "B"} else []))
+            for i, t in enumerate(texts)
         ]
+        if s in {"A", "B"}:
+            # genuinely shared chunks: one CHUNK node under both subjects (explicit chunk id)
+            for i, t in enumerate(shared_texts):
+                md = {"source": f"shared-{i}", "tombstone.chunk_id": derived_ulid("shared", str(i))}
+                docs.append(
+                    stamp(
+                        Document(page_content=t, metadata=md),
+                        s,
+                        f"shared-{i}",
+                        "default",
+                        pepper=pepper,
+                    )
+                )
         vs.add_documents(docs)
+
     ta = run_trace(rt, "A", with_store_gaps=False)[0]
     tb = run_trace(rt, "B", with_store_gaps=False)[0]
     if overlap:

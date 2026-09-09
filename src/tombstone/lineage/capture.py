@@ -102,21 +102,23 @@ class Capture:
         ch = content_hash(text)
         chunk_id = str(md.get(K_CHUNK) or derived_ulid("chunk", source.artifact_id, ch))
         node = self.lineage.node(chunk_id)
-        if node is None:
-            node = Node(
-                artifact_id=chunk_id,
-                kind=ArtifactKind.CHUNK,
-                store=self.chunk_store,
-                store_key=chunk_id,
-                scope=source.scope,
-                content_hash=ch,
-                embedding_fingerprint=None,
-                subject_hmac=source.subject_hmac,
-                created_seq=self.lineage.next_seq(),
-            )
-            with self.lineage.tx():
+        with self.lineage.tx():
+            if node is None:
+                node = Node(
+                    artifact_id=chunk_id,
+                    kind=ArtifactKind.CHUNK,
+                    store=self.chunk_store,
+                    store_key=chunk_id,
+                    scope=source.scope,
+                    content_hash=ch,
+                    embedding_fingerprint=None,
+                    subject_hmac=source.subject_hmac,
+                    created_seq=self.lineage.next_seq(),
+                )
                 self.lineage.add_node(node)
-                self.lineage.add_edge(Edge(source.artifact_id, chunk_id, "chunk"))
+            # A chunk explicitly shared by two sources (tombstone.chunk_id) gets an edge from
+            # each: both subjects' traces reach it and flag it `shared`.
+            self.lineage.add_edge(Edge(source.artifact_id, chunk_id, "chunk"))
         out = dict(md)
         out[K_CHUNK] = chunk_id
         return node, out
