@@ -50,3 +50,21 @@ def test_pooled_auc_separates_within_subject_signal_from_pooled_signal() -> None
     r = detection_accuracy(pairs)
     assert r["paired"] == 1.0
     assert 0.4 < r["pooled_auc"] < 0.65
+
+
+def test_confidence_intervals_bracket_the_estimate_and_admit_uncertainty() -> None:
+    """At n=20 the interval is wide; a weak signal must not be reported as if it were settled."""
+    rng = random.Random(3)
+    noise = [(rng.gauss(0.5, 0.1), rng.gauss(0.5, 0.1)) for _ in range(20)]
+    r = detection_accuracy(noise)
+    assert r["paired_ci_low"] <= r["paired"] <= r["paired_ci_high"]
+    assert r["pooled_auc_ci_low"] <= r["pooled_auc"] <= r["pooled_auc_ci_high"]
+    # pure noise: the interval must include chance rather than claim a finding
+    assert r["paired_ci_low"] <= 0.5 <= r["paired_ci_high"]
+    assert r["pooled_auc_ci_low"] <= 0.5 <= r["pooled_auc_ci_high"]
+
+
+def test_strong_signal_excludes_chance() -> None:
+    pairs = [(0.9 + i * 0.001, 0.1 + i * 0.001) for i in range(20)]
+    r = detection_accuracy(pairs)
+    assert r["paired_ci_low"] > 0.5 and r["pooled_auc_ci_low"] > 0.5

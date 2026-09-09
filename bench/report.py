@@ -93,12 +93,14 @@ def semantic_section(a: dict[str, Any]) -> list[str]:
         "subjects whose drift exceeded a same-cluster control matched on Top-K slots vacated; 50% is "
         "chance. **Threshold** is a leave-one-out classifier calibrated on the other subjects.",
         "",
-        "| query budget | paired accuracy | pooled AUC | threshold accuracy | subjects |",
+        "| query budget | paired accuracy [95% CI] | pooled AUC [95% CI] | threshold | subjects |",
         "|---|---|---|---|---|",
     ]
     for c in s75["detail"]["curve"]:
         lines.append(
-            f"| {c['budget']} | {_pct(c['paired'])} | {_f(c.get('pooled_auc'), 2)} | "
+            f"| {c['budget']} | {_pct(c['paired'])} [{_pct(c.get('paired_ci_low'))}, "
+            f"{_pct(c.get('paired_ci_high'))}] | {_f(c.get('pooled_auc'), 2)} "
+            f"[{_f(c.get('pooled_auc_ci_low'), 2)}, {_f(c.get('pooled_auc_ci_high'), 2)}] | "
             f"{_pct(c['loo_threshold'])} | {int(c['n'])} |"
         )
     lines += [
@@ -256,7 +258,8 @@ def regenerate() -> Path:
         s75 = next((x for x in a["strategies"] if x["id"] == "7.5"), None)
         curve = (s75 or {}).get("detail", {}).get("curve") or []
         if curve:
-            best = max(curve, key=lambda c: c["paired"])
+            # quote the budget with the strongest *lower bound*, not the largest point estimate
+            best = max(curve, key=lambda c: c.get("paired_ci_low", 0.0))
             pooled = [c.get("pooled_auc") for c in curve if c.get("pooled_auc") is not None]
             pooled_txt = (
                 f" Pooled across subjects the same attacker reaches AUC "
@@ -267,7 +270,8 @@ def regenerate() -> Path:
             )
             anti.append(
                 f"- **Semantic drift survives a full Tombstone erasure**: an attacker reaches "
-                f"{_pct(best['paired'])} paired accuracy at a query budget of {best['budget']} "
+                f"{_pct(best['paired'])} paired accuracy [95% CI {_pct(best.get('paired_ci_low'))}, "
+                f"{_pct(best.get('paired_ci_high'))}] at a query budget of {best['budget']} "
                 f"(n={int(best['n'])}) asking whether a subject was ever in the index, against a "
                 f"same-cluster control matched on Top-K slots vacated.{pooled_txt} Tombstone "
                 "measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."

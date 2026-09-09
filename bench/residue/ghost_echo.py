@@ -9,6 +9,7 @@ paired-comparison statistic), plus a leave-one-out threshold classifier over all
 
 from __future__ import annotations
 
+import random
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -27,10 +28,42 @@ def measure_pair(
     return probe.after(target_key)
 
 
+def _bootstrap_ci(
+    pairs: Sequence[tuple[float, float]],
+    stat: Callable[[Sequence[tuple[float, float]]], float],
+    n_boot: int = 500,
+    seed: int = 0,
+) -> tuple[float, float]:
+    """95% CI for a statistic over subjects, resampling subjects with replacement."""
+    if len(pairs) < 2:
+        return 0.0, 1.0
+    rng = random.Random(seed)
+    samples = sorted(stat([pairs[rng.randrange(len(pairs))] for _ in pairs]) for _ in range(n_boot))
+    return samples[int(0.025 * (n_boot - 1))], samples[int(0.975 * (n_boot - 1))]
+
+
+def _paired(pairs: Sequence[tuple[float, float]]) -> float:
+    return sum(1 for t, c in pairs if t > c) / max(1, len(pairs))
+
+
+def _pooled_auc(pairs: Sequence[tuple[float, float]]) -> float:
+    targets = [t for t, _ in pairs]
+    controls = [c for _, c in pairs]
+    if not targets or not controls:
+        return 0.5
+    wins = sum(1.0 if t > c else 0.5 if t == c else 0.0 for t in targets for c in controls)
+    return wins / (len(targets) * len(controls))
+
+
 def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]:
     """``pairs`` = (target_drift, control_drift) per subject.
 
     ``paired``: P(target > control), the paper's paired-comparison statistic; 50% is chance.
+
+    Every rate carries a bootstrap 95% CI over subjects. At n=20 the interval is roughly ±0.20,
+    which is what makes repeated runs of this experiment land on different point estimates; the
+    index build is also not seeded (Chroma does not expose hnswlib's seed), so the neighbourhood
+    itself differs slightly between runs. Quote the interval, never the point alone.
 
     ``pooled_auc``: P(a random subject's drift > a random subject's control drift), pooled across
     subjects. It answers the harder question — can an attacker who cannot construct a control for
@@ -46,13 +79,10 @@ def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]
     """
     if not pairs:
         return {"paired": 0.0, "loo_threshold": 0.0, "n": 0.0}
-    paired = sum(1 for t, c in pairs if t > c) / len(pairs)
-    # Pooled AUC: P(a random target's drift > a random control's drift) across subjects. Unlike
-    # the threshold classifier it needs no threshold to be chosen, so it is unbiased at n=20.
-    targets = [t for t, _ in pairs]
-    controls = [c for _, c in pairs]
-    wins = sum(1.0 if t > c else 0.5 if t == c else 0.0 for t in targets for c in controls)
-    pooled_auc = wins / (len(targets) * len(controls))
+    paired = _paired(pairs)
+    pooled_auc = _pooled_auc(pairs)
+    paired_lo, paired_hi = _bootstrap_ci(pairs, _paired, seed=1)
+    auc_lo, auc_hi = _bootstrap_ci(pairs, _pooled_auc, seed=2)
     values = [(t, 1) for t, _ in pairs] + [(c, 0) for _, c in pairs]
     correct = 0
     for i, (v, y) in enumerate(values):
@@ -70,7 +100,11 @@ def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]
         correct += int(predicted == (y == 1))
     return {
         "paired": paired,
+        "paired_ci_low": paired_lo,
+        "paired_ci_high": paired_hi,
         "pooled_auc": pooled_auc,
+        "pooled_auc_ci_low": auc_lo,
+        "pooled_auc_ci_high": auc_hi,
         "loo_threshold": correct / len(values),
         "n": float(len(pairs)),
     }
