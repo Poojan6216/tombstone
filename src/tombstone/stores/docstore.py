@@ -25,6 +25,17 @@ from tombstone.stores.base import (
 from tombstone.verify.physical import scan_files_for_patterns
 
 
+class _Rows:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def fetchone(self) -> Any:
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list[Any]:
+        return list(self._rows)
+
+
 class SQLiteDocStore:
     kind = "docstore"
 
@@ -42,13 +53,14 @@ class SQLiteDocStore:
         )
         self.capabilities: frozenset[VerifyLevel] = self.detect_capabilities()
 
-    def _x(self, sql: str, params: Any = ()) -> Any:
+    def _x(self, sql: str, params: Any = ()) -> _Rows:
         with self._lock:
-            return self._conn.execute(sql, params)
+            cur = self._conn.execute(sql, params)
+            return _Rows(cur.fetchall() if cur.description else [])
 
-    def _xm(self, sql: str, rows: Any) -> Any:
+    def _xm(self, sql: str, rows: Any) -> None:
         with self._lock:
-            return self._conn.executemany(sql, rows)
+            self._conn.executemany(sql, rows)
 
     def detect_capabilities(self) -> frozenset[VerifyLevel]:
         caps = {VerifyLevel.LOGICAL}

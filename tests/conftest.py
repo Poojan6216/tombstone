@@ -14,6 +14,12 @@ pytest_plugins: list[str] = []
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    # Intel macOS: torch ships Intel's libiomp5 and faiss-cpu ships LLVM's libomp. Two OpenMP
+    # runtimes in one process crash the moment either spawns worker threads (a libomp worker
+    # blocks on a libiomp5 barrier — SIGSEGV). Keep both at one thread for the whole session.
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
     # Keep every test's logs out of the user's terminal and away from stdout.
     os.environ.setdefault("TOMBSTONE_LOG_LEVEL", "warning")
     os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")

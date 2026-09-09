@@ -35,6 +35,20 @@ class _Cursor(Protocol):
     def fetchall(self) -> list[Any]: ...
 
 
+class _Result:
+    """Fully materialised statement result with the cursor-like surface the store uses."""
+
+    def __init__(self, rows: list[Any], rowcount: int) -> None:
+        self._rows = rows
+        self.rowcount = rowcount
+
+    def fetchone(self) -> Any:
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list[Any]:
+        return list(self._rows)
+
+
 class _Dialect:
     """Translates the tiny SQL surface we use between sqlite3 and psycopg."""
 
@@ -111,9 +125,13 @@ class LineageStore:
 
     # --- low level ---------------------------------------------------------------------------
 
-    def _exec(self, sql: str, params: Sequence[Any] = ()) -> Any:
+    def _exec(self, sql: str, params: Sequence[Any] = ()) -> _Result:
+        """Execute and fetch under the lock: a live cursor must never outlive the lock, or
+        another thread's statement resets it."""
         with self._lock:
-            return self._conn.execute(self._d.q(sql), tuple(params))
+            cur = self._conn.execute(self._d.q(sql), tuple(params))
+            rows = cur.fetchall() if cur.description else []
+            return _Result(rows, cur.rowcount)
 
     def _executemany(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
         rows = list(rows)

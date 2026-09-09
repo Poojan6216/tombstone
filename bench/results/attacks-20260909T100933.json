@@ -1,0 +1,48 @@
+{
+ "generated": "20260909T100933",
+ "git": "f0547e7",
+ "kind": "attacks",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "strategies": [
+  {
+   "detail": {
+    "derived_from": {
+     "canary_survived": 0,
+     "rate": 0.0,
+     "subjects": 3
+    },
+    "unstamped": {
+     "canary_survived": 3,
+     "rate": 1.0,
+     "subjects": 3
+    }
+   },
+   "id": "7.2",
+   "mitigation": "stamp derived documents with derived_from=<source artifact id> (the app must do it; Tombstone cannot see the edge otherwise)",
+   "name": "derived content without an edge",
+   "rate": 1.0,
+   "rate_text": "unstamped summaries: 3/3 canaries survive; with derived_from stamping: 0/3",
+   "survives": "LLM summaries stored as new, unstamped documents",
+   "wall_s": 38.2
+  },
+  {
+   "detail": {
+    "subjects": 3,
+    "survived": 3
+   },
+   "id": "7.4",
+   "mitigation": "none inside Tombstone by design: searching other subjects' data by similarity would over-delete their data (Hard Rule 3). The app must record mentions=[...] at ingest; then the documents are listed NEEDS_HUMAN for review (docs/threat-model.md).",
+   "name": "third-party mentions without an edge",
+   "rate": 1.0,
+   "rate_text": "3/3 subjects' canaries survive in other subjects' documents (no mentions edge \u2192 0 NEEDS_HUMAN rows listed)",
+   "survives": "the subject's data quoted inside other subjects' documents",
+   "wall_s": 11.3
+  }
+ ],
+ "subjects": 3
+}

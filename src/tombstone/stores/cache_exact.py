@@ -47,6 +47,17 @@ def parse_chunk_ids(prompt: str) -> list[str]:
     return sorted(set(ids))
 
 
+class _Rows:
+    def __init__(self, rows: list[Any]) -> None:
+        self._rows = rows
+
+    def fetchone(self) -> Any:
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self) -> list[Any]:
+        return list(self._rows)
+
+
 class TombstoneExactCache(BaseCache):
     kind = "cache_exact"
 
@@ -69,9 +80,10 @@ class TombstoneExactCache(BaseCache):
             {VerifyLevel.LOGICAL, VerifyLevel.PHYSICAL}
         )
 
-    def _x(self, sql: str, params: Any = ()) -> Any:
+    def _x(self, sql: str, params: Any = ()) -> _Rows:
         with self._lock:
-            return self._side.execute(sql, params)
+            cur = self._side.execute(sql, params)
+            return _Rows(cur.fetchall() if cur.description else [])
 
     def version(self) -> str:
         return f"langchain SQLiteCache on sqlite {sqlite3.sqlite_version}"

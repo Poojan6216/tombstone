@@ -13,6 +13,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+# Intel macOS: torch (libiomp5) and faiss-cpu (libomp) are two OpenMP runtimes in one process;
+# multi-threaded use of either can segfault. Torch's own thread count is set separately
+# (TOMBSTONE_TORCH_THREADS) after import; OpenMP pools stay at one thread.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT))

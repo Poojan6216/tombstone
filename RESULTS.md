@@ -22,3 +22,12 @@ Inversion (Vec2Text): not run (see bench/residue/inversion.py).
 ## Anti-results
 
 - **Semantic drift survives Tombstone full on faiss**: median Top-5 centroid drift -0.0000 vs same-cluster control 0.0000; target > control in 50.0% of paired comparisons (n=2, query budget 5). Tombstone measures this; it does not fix it (*Ghost Echoes*, arXiv 2608.20352).
+
+## Attacks that work against Tombstone
+
+Command: `uv run python bench/adversarial/run_attacks.py --all` (source `bench/results/attacks-latest.json`, generated 20260909T100933, git f0547e7). Measured rates, not footnotes. Where something was fixed, the pre-fix number stays with its commit.
+
+| strategy | what survives | measured rate | mitigation and its cost |
+|---|---|---|---|
+| 7.2 derived content without an edge | LLM summaries stored as new, unstamped documents | unstamped summaries: 3/3 canaries survive; with derived_from stamping: 0/3 | stamp derived documents with derived_from=<source artifact id> (the app must do it; Tombstone cannot see the edge otherwise) |
+| 7.4 third-party mentions without an edge | the subject's data quoted inside other subjects' documents | 3/3 subjects' canaries survive in other subjects' documents (no mentions edge → 0 NEEDS_HUMAN rows listed) | none inside Tombstone by design: searching other subjects' data by similarity would over-delete their data (Hard Rule 3). The app must record mentions=[...] at ingest; then the documents are listed NEEDS_HUMAN for review (docs/threat-model.md). |
