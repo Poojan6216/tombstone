@@ -32,15 +32,27 @@ def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]
 
     ``paired``: P(target > control), the paper's paired-comparison statistic; 50% is chance.
 
-    ``loo_threshold``: leave-one-out accuracy of a threshold classifier that an attacker
-    calibrates on the other subjects. The attacker picks the threshold *and the direction* —
-    a rule that fires below the threshold is just as usable as one that fires above it, so
-    testing only "above" would understate what an attacker can do, and a threat-model number
-    must never do that.
+    ``pooled_auc``: P(a random subject's drift > a random subject's control drift), pooled across
+    subjects. It answers the harder question — can an attacker who cannot construct a control for
+    *this* subject still tell targets from controls? — and needs no threshold, so it is unbiased
+    at this sample size.
+
+    ``loo_threshold``: leave-one-out accuracy of a threshold classifier an attacker calibrates on
+    the other subjects, picking the threshold *and the direction* (a rule that fires below the
+    threshold is as usable as one that fires above it, and testing only "above" would understate
+    the attacker). Choosing a threshold on n-1 overlapping points overfits, so this estimate is
+    biased downward when there is no pooled signal and can read below chance; ``pooled_auc`` is
+    the number to quote for that question.
     """
     if not pairs:
         return {"paired": 0.0, "loo_threshold": 0.0, "n": 0.0}
     paired = sum(1 for t, c in pairs if t > c) / len(pairs)
+    # Pooled AUC: P(a random target's drift > a random control's drift) across subjects. Unlike
+    # the threshold classifier it needs no threshold to be chosen, so it is unbiased at n=20.
+    targets = [t for t, _ in pairs]
+    controls = [c for _, c in pairs]
+    wins = sum(1.0 if t > c else 0.5 if t == c else 0.0 for t in targets for c in controls)
+    pooled_auc = wins / (len(targets) * len(controls))
     values = [(t, 1) for t, _ in pairs] + [(c, 0) for _, c in pairs]
     correct = 0
     for i, (v, y) in enumerate(values):
@@ -56,7 +68,12 @@ def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]
         _acc, thr, direction = best
         predicted = (v > thr) if direction == 1 else (v < thr)
         correct += int(predicted == (y == 1))
-    return {"paired": paired, "loo_threshold": correct / len(values), "n": float(len(pairs))}
+    return {
+        "paired": paired,
+        "pooled_auc": pooled_auc,
+        "loo_threshold": correct / len(values),
+        "n": float(len(pairs)),
+    }
 
 
 def summarize(results: Sequence[dict[str, float]]) -> dict[str, Any]:

@@ -93,12 +93,13 @@ def semantic_section(a: dict[str, Any]) -> list[str]:
         "subjects whose drift exceeded a same-cluster control matched on Top-K slots vacated; 50% is "
         "chance. **Threshold** is a leave-one-out classifier calibrated on the other subjects.",
         "",
-        "| query budget | paired accuracy | threshold accuracy | subjects |",
-        "|---|---|---|---|",
+        "| query budget | paired accuracy | pooled AUC | threshold accuracy | subjects |",
+        "|---|---|---|---|---|",
     ]
     for c in s75["detail"]["curve"]:
         lines.append(
-            f"| {c['budget']} | {_pct(c['paired'])} | {_pct(c['loo_threshold'])} | {int(c['n'])} |"
+            f"| {c['budget']} | {_pct(c['paired'])} | {_f(c.get('pooled_auc'), 2)} | "
+            f"{_pct(c['loo_threshold'])} | {int(c['n'])} |"
         )
     lines += [
         "",
@@ -256,12 +257,20 @@ def regenerate() -> Path:
         curve = (s75 or {}).get("detail", {}).get("curve") or []
         if curve:
             best = max(curve, key=lambda c: c["paired"])
+            pooled = [c.get("pooled_auc") for c in curve if c.get("pooled_auc") is not None]
+            pooled_txt = (
+                f" Pooled across subjects the same attacker reaches AUC "
+                f"{_f(max(pooled), 2)}, so the signal is strongest when a control for the very "
+                "subject is available."
+                if pooled
+                else ""
+            )
             anti.append(
                 f"- **Semantic drift survives a full Tombstone erasure**: an attacker reaches "
                 f"{_pct(best['paired'])} paired accuracy at a query budget of {best['budget']} "
-                f"(n={int(best['n'])}) asking whether a subject was ever in the index, with a "
-                f"same-cluster control matched on Top-K slots vacated. Tombstone measures this and "
-                "reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."
+                f"(n={int(best['n'])}) asking whether a subject was ever in the index, against a "
+                f"same-cluster control matched on Top-K slots vacated.{pooled_txt} Tombstone "
+                "measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."
             )
     if u:
         for name in ("M1", "M2"):
