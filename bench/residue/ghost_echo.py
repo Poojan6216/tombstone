@@ -30,9 +30,14 @@ def measure_pair(
 def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]:
     """``pairs`` = (target_drift, control_drift) per subject.
 
-    paired: P(target > control). loo_threshold: leave-one-out accuracy of a threshold classifier
-    that labels a drift value 'deleted target' when above the threshold that best separates the
-    remaining pairs (a budget-limited attacker who can calibrate on other subjects)."""
+    ``paired``: P(target > control), the paper's paired-comparison statistic; 50% is chance.
+
+    ``loo_threshold``: leave-one-out accuracy of a threshold classifier that an attacker
+    calibrates on the other subjects. The attacker picks the threshold *and the direction* —
+    a rule that fires below the threshold is just as usable as one that fires above it, so
+    testing only "above" would understate what an attacker can do, and a threat-model number
+    must never do that.
+    """
     if not pairs:
         return {"paired": 0.0, "loo_threshold": 0.0, "n": 0.0}
     paired = sum(1 for t, c in pairs if t > c) / len(pairs)
@@ -40,13 +45,17 @@ def detection_accuracy(pairs: Sequence[tuple[float, float]]) -> dict[str, float]
     correct = 0
     for i, (v, y) in enumerate(values):
         rest = values[:i] + values[i + 1 :]
-        cands = sorted({x for x, _ in rest})
-        best_thr, best_acc = 0.0, -1.0
-        for thr in cands:
-            acc = sum(1 for x, yy in rest if (x > thr) == (yy == 1)) / len(rest)
-            if acc > best_acc:
-                best_thr, best_acc = thr, acc
-        correct += int((v > best_thr) == (y == 1))
+        best: tuple[float, float, int] = (-1.0, 0.0, 1)  # (accuracy, threshold, direction)
+        for thr in sorted({x for x, _ in rest}):
+            for direction in (1, -1):
+                acc = sum(
+                    1 for x, yy in rest if ((x > thr) if direction == 1 else (x < thr)) == (yy == 1)
+                ) / len(rest)
+                if acc > best[0]:
+                    best = (acc, thr, direction)
+        _acc, thr, direction = best
+        predicted = (v > thr) if direction == 1 else (v < thr)
+        correct += int(predicted == (y == 1))
     return {"paired": paired, "loo_threshold": correct / len(values), "n": float(len(pairs))}
 
 

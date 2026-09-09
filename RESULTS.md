@@ -20,24 +20,24 @@ Inversion (Vec2Text): not run (see bench/residue/inversion.py).
 
 ## Semantic residue (Ghost Echoes protocol, credited)
 
-Command: `uv run python bench/adversarial/run_attacks.py --only 7.5` (source `bench/results/attacks-latest.json`, generated 20260909T161641, git 89f79d6). The protocol is from *Ghost Echoes* (arXiv 2608.20352); the numbers are ours, on our corpus. After a full Tombstone erasure, an attacker with a query budget measures how far the Top-5 centroid moved and asks whether the subject was ever there. **Paired** is the fraction of subjects whose drift exceeded a same-cluster control matched on Top-K slots vacated; 50% is chance. **Threshold** is a leave-one-out classifier calibrated on the other subjects.
+Command: `uv run python bench/adversarial/run_attacks.py --only 7.5` (source `bench/results/attacks-latest.json`, generated 20260909T163214, git c654dd3). The protocol is from *Ghost Echoes* (arXiv 2608.20352); the numbers are ours, on our corpus. After a full Tombstone erasure, an attacker with a query budget measures how far the Top-5 centroid moved and asks whether the subject was ever there. **Paired** is the fraction of subjects whose drift exceeded a same-cluster control matched on Top-K slots vacated; 50% is chance. **Threshold** is a leave-one-out classifier calibrated on the other subjects.
 
 | query budget | paired accuracy | threshold accuracy | subjects |
 |---|---|---|---|
-| 5 | 20.0% | 5.0% | 20 |
-| 10 | 20.0% | 5.0% | 20 |
-| 20 | 25.0% | 5.0% | 20 |
-| 40 | 15.0% | 5.0% | 20 |
+| 5 | 70.0% | 17.5% | 20 |
+| 10 | 65.0% | 62.5% | 20 |
+| 20 | 60.0% | 50.0% | 20 |
+| 40 | 65.0% | 57.5% | 20 |
 
 This is the layer Tombstone cannot close. It is measured and reported, never fixed and never claimed as proof that content is present.
 
 ## Anti-results
 
-- **Semantic drift survives a full Tombstone erasure**: an attacker reaches 25.0% paired accuracy at a query budget of 20 (n=20) asking whether a subject was ever in the index, with a same-cluster control matched on Top-K slots vacated. Tombstone measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352).
+- **Semantic drift survives a full Tombstone erasure**: an attacker reaches 70.0% paired accuracy at a query budget of 5 (n=20) asking whether a subject was ever in the index, with a same-cluster control matched on Top-K slots vacated. Tombstone measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352).
 
 ## Attacks that work against Tombstone
 
-Command: `uv run python bench/adversarial/run_attacks.py --all` (source `bench/results/attacks-latest.json`, generated 20260909T161641, git 89f79d6). Measured rates, not footnotes. Where something was fixed, the pre-fix number stays with its commit.
+Command: `uv run python bench/adversarial/run_attacks.py --all` (source `bench/results/attacks-latest.json`, generated 20260909T163214, git c654dd3). Measured rates, not footnotes. Where something was fixed, the pre-fix number stays with its commit.
 
 | strategy | what survives | measured rate | mitigation and its cost |
 |---|---|---|---|
@@ -45,7 +45,7 @@ Command: `uv run python bench/adversarial/run_attacks.py --all` (source `bench/r
 | 7.2 derived content without an edge | LLM summaries stored as new, unstamped documents | unstamped summaries: 20/20 canaries survive; with derived_from stamping: 0/20 | stamp derived documents with derived_from=<source artifact id> (the app must do it; Tombstone cannot see the edge otherwise) |
 | 7.3 paraphrased semantic-cache hits | cached answers quoting the subject via a neighbour's question | purge_k=0: 2/20 subjects leak through 20 paraphrases; purge_k=3: 0/20 (collateral: 34 unrelated entries purged of 40) | SemanticCache(purge_k=3): invalidate the k nearest cache neighbours of every erased entry — measured collateral cost above |
 | 7.4 third-party mentions without an edge | the subject's data quoted inside other subjects' documents | 20/20 subjects' canaries survive in other subjects' documents (no mentions edge → 0 NEEDS_HUMAN rows listed) | none inside Tombstone by design: searching other subjects' data by similarity would over-delete their data (Hard Rule 3). The app must record mentions=[...] at ingest; then the documents are listed NEEDS_HUMAN for review (docs/threat-model.md). |
-| 7.5 Ghost Echoes drift after full Tombstone erasure | retrieval-context drift in the proximity graph (the layer we cannot close) | budget 5: paired 20.0%, threshold 5.0% (n=20); budget 10: paired 20.0%, threshold 5.0% (n=20); budget 20: paired 25.0%, threshold 5.0% (n=20); budget 40: paired 15.0%, threshold 5.0% (n=20) | none at the application layer; reported as RESIDUAL(semantic) when the CI excludes the control, never blocks, never claimed fixed |
+| 7.5 Ghost Echoes drift after full Tombstone erasure | retrieval-context drift in the proximity graph (the layer we cannot close) | budget 5: paired 70.0%, threshold 17.5% (n=20); budget 10: paired 65.0%, threshold 62.5% (n=20); budget 20: paired 60.0%, threshold 50.0% (n=20); budget 40: paired 65.0%, threshold 57.5% (n=20) | none at the application layer; reported as RESIDUAL(semantic) when the CI excludes the control, never blocks, never claimed fixed |
 | 7.6 relearning attack on unlearning | forgotten canaries resurface after light continued training | not run yet: run bench/unlearn/run_unlearn.py first | exact shard retrain (M3): the data is not in the weights |
 | 7.7 backup and replica | every vector, in the snapshot taken before erasure | filesystem snapshot of the Chroma dir: 10/10 subjects fully recoverable after a VERIFIED erasure; pg_dump: 3/3 recoverable | none possible from inside the application: receipts listed 'database backups and snapshots' as OUT_OF_SCOPE in 10/10 cases; backup retention policy is the operator's |
 | 7.8 suppression race under 50 concurrent readers | queries answered between the CLI call and the durable suppression record | hits after the durable suppression entry: 0 (over 5 erasures); hits before it: 5161; suppression latency median 244 ms | the window is the suppression latency; suppression is the first journaled step and the wrapper consults the tombstone set on every query |
