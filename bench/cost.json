@@ -92,8 +92,19 @@
    "key": "attacks-bench",
    "seconds": 744.4,
    "when": "20260909T170003"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 1527.9,
+   "when": "20260909T172749"
+  },
+  {
+   "key": "unlearn-M3",
+   "seconds": 7735.3,
+   "subjects": 20,
+   "when": "20260909T190649"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 3.954
+ "total_cpu_hours": 6.527
 }

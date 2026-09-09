@@ -134,6 +134,11 @@ def measure(
     }
 
 
+def _checkpoint(payload: dict[str, Any]) -> None:
+    """Save after every method. A crash five hours in must not cost the methods that finished."""
+    save_results("unlearn", {**payload, "partial": True})
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--all", action="store_true")
@@ -206,10 +211,32 @@ def main(argv: list[str] | None = None) -> int:
     methods: list[dict[str, Any]] = []
     grid: list[dict[str, Any]] = []
     relearn_rows: list[dict[str, Any]] = []
+
+    def snapshot() -> dict[str, Any]:
+        return {
+            "model": MODEL,
+            "device": "cpu",
+            "shards": ns.shards,
+            "subjects": len(measured),
+            "train_subjects": ns.train_subjects,
+            "config": cfg.to_dict(),
+            "methods": methods,
+            "grid": grid,
+            "relearn": relearn_rows,
+            "composition": composition,
+            "train_shards_s": t_shards,
+            "train_unsharded_s": t_flat,
+        }
+
     # M0
     m0 = measure(
         MODEL, adapters / "serving", [canaries[s] for s in measured], [], [], holdout, reference
     )
+    # M3 below drops the measured subjects' rows from the dataset, so every later method that
+    # needs their text (the M1/M2 forget sets, M4's oracle) must read it now, not after.
+    members_by_subject: dict[str, list[str]] = {
+        s: _member_texts(ds, s, rt, ns.shards) for s in subjects_all
+    }
     m0_members = []
     for s in measured:
         hm = SubjectRef.from_raw(s, rt.pepper()).hmac
@@ -227,6 +254,7 @@ def main(argv: list[str] | None = None) -> int:
             "note": f"shard ensemble; holdout ppl {base_ppl:.2f}",
         }
     )
+    _checkpoint(snapshot())
     # M3 exact: unlearn each measured subject in turn (cumulative), measure after each
     t0 = time.time()
     ex_hits = 0
@@ -321,11 +349,11 @@ def main(argv: list[str] | None = None) -> int:
     for method in ("npo", "gradient_difference"):
         best = None
         for steps, lr in grid_space:
-            forget = [t for s in grid_subjects for t in _member_texts(ds, s, rt, ns.shards)]
+            forget = [t for s in grid_subjects for t in members_by_subject[s]]
             retain = [
                 t
                 for s in subjects_all[len(measured) : len(measured) + 30]
-                for t in _member_texts(ds, s, rt, ns.shards)
+                for t in members_by_subject[s]
             ]
             work = root / f"grid-{method}-{steps}-{lr}"
             if work.exists():
@@ -336,8 +364,8 @@ def main(argv: list[str] | None = None) -> int:
                 MODEL,
                 work,
                 work,
-                forget,
-                retain,
+                _require_nonempty(forget, f"{method} grid forget set"),
+                _require_nonempty(retain, f"{method} grid retain set"),
                 UnlearnConfig(method=method, steps=steps, lr=lr),
                 log=None,
             )
@@ -355,6 +383,7 @@ def main(argv: list[str] | None = None) -> int:
                 "chosen": False,
             }
             grid.append(row)
+            _checkpoint(snapshot())
             log(f"grid {method} steps={steps} lr={lr}: canary {h}/{n} ppl {ppl:.2f}")
             ok_ppl = ppl <= ppl_flat * tol
             if ok_ppl and (best is None or h < best[0] or (h == best[0] and ppl < best[1])):
@@ -377,19 +406,19 @@ def main(argv: list[str] | None = None) -> int:
         if work.exists():
             shutil.rmtree(work)
         shutil.copytree(flat, work)
-        forget = [t for s in measured for t in _member_texts(ds, s, rt, ns.shards)]
+        forget = [t for s in measured for t in members_by_subject[s]]
         retain = [
             t
             for s in subjects_all[len(measured) : len(measured) + 60]
-            for t in _member_texts(ds, s, rt, ns.shards)
+            for t in members_by_subject[s]
         ]
         t0 = time.time()
         approximate_unlearn(
             MODEL,
             work,
             work,
-            forget,
-            retain,
+            _require_nonempty(forget, f"{name} forget set"),
+            _require_nonempty(retain, f"{name} retain set"),
             UnlearnConfig(method=method, steps=steps, lr=lr),
             log=log,
         )
@@ -412,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
                 "note": f"steps={steps} lr={lr} (grid-chosen); others' canaries {res['others_extracted']}/{res['others_total']}",
             }
         )
+        _checkpoint(snapshot())
         cost_add(f"unlearn-{name}", wall)
         # relearning attack (7.6): light continued training on unrelated AG News text
         for k in (10, 50) if not ns.quick else (10,):
@@ -421,6 +451,7 @@ def main(argv: list[str] | None = None) -> int:
             relearn(MODEL, work, rl, holdout[60:120], steps=k, seed=3)
             tok, rm = load_adapter_model(MODEL, rl)
             h, n, _ = canary_extraction_rate(tok, rm, [canaries[s] for s in measured])
+            _checkpoint(snapshot())
             relearn_rows.append(
                 {
                     "method": name + " " + method,
@@ -467,7 +498,7 @@ def main(argv: list[str] | None = None) -> int:
         root / "oracle",
         [canaries[s] for s in m4_subjects],
         [canaries[o] for o in subjects_all[len(measured) : len(measured) + 20]],
-        [t for s in m4_subjects for t in _member_texts(ds, s, rt, ns.shards)],
+        [t for s in m4_subjects for t in members_by_subject[s]],
         holdout,
         reference,
     )
@@ -480,6 +511,7 @@ def main(argv: list[str] | None = None) -> int:
             "note": f"retrained once without {len(m4_subjects)} subject(s) (CPU-bounded); the unsharded reference is 'M0-unsharded'",
         }
     )
+    _checkpoint(snapshot())
     cost_add("unlearn-M4", wall4)
     payload = {
         "model": MODEL,
@@ -503,6 +535,17 @@ def main(argv: list[str] | None = None) -> int:
     regenerate()
     rt.close()
     return 0
+
+
+def _require_nonempty(texts: list[str], what: str) -> list[str]:
+    """An empty forget or retain set means the dataset was already reclaimed; tokenizing it
+    fails deep inside transformers with an unreadable IndexError."""
+    if not texts:
+        raise RuntimeError(
+            f"{what} is empty — the dataset rows were dropped before this method ran. "
+            "Member texts must be snapshotted before M3 reclaims them."
+        )
+    return texts
 
 
 def _member_texts(ds: DatasetStore, subject: str, rt: Runtime, shards: int) -> list[str]:
