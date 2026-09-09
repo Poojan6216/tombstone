@@ -47,6 +47,8 @@ class TombstoneVectorStore(VectorStore):
         self.capture = capture
         self.docstore = docstore
         self._lc_embeddings = langchain_embeddings
+        self._tomb_cache: set[str] = set()
+        self._tomb_seq = -1
         capture.register(backend.name, backend.kind)
 
     # --- construction ------------------------------------------------------------------------------
@@ -163,7 +165,17 @@ class TombstoneVectorStore(VectorStore):
     # --- read path (all suppression-aware) -----------------------------------------------------------
 
     def _tombstoned(self) -> set[str]:
-        return set(self.capture.lineage.tombstoned_ids(self.capture.scope))
+        """The suppression set, cached against the lineage sequence counter.
+
+        Every retrieval consults this, so the uncached form (a join over the whole tombstones
+        table) put a linear scan on the query hot path. Any tombstone write takes a sequence
+        number, so a one-row counter read is enough to know the cache is still current.
+        """
+        seq = self.capture.lineage.current_seq()
+        if seq != self._tomb_seq:
+            self._tomb_cache = set(self.capture.lineage.tombstoned_ids(self.capture.scope))
+            self._tomb_seq = seq
+        return self._tomb_cache
 
     def _live(self, hits: Sequence[Hit]) -> list[Hit]:
         dead = self._tombstoned()

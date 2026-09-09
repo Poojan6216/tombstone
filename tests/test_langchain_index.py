@@ -10,7 +10,7 @@ import pytest
 from tests import _corpus, _stores
 from tests.conftest import requires_langchain
 from tombstone.lineage.capture import Capture
-from tombstone.lineage.stamp import K_ARTIFACT, K_CHUNK, stamp
+from tombstone.lineage.stamp import K_ARTIFACT, K_CHUNK, K_EMBED, stamp
 from tombstone.lineage.store import LineageStore
 from tombstone.model.artifacts import ArtifactKind, Scope
 
@@ -144,5 +144,35 @@ def test_unstamped_documents_are_refused(tmp_path: Path) -> None:
     vs, lineage = _build_vs(tmp_path)
     with pytest.raises(ValueError, match="not stamped"):
         vs.add_documents([Document(page_content="hi", metadata={"source": "x"})])
+    vs.backend.close()
+    lineage.close()
+
+
+def test_suppression_cache_invalidates_on_new_erasure(tmp_path: Path, pepper: bytes) -> None:
+    """The retrieval path caches the suppression set; a later erasure must still be honoured."""
+    from langchain_core.indexing import InMemoryRecordManager, index
+
+    from tombstone.model.artifacts import ArtifactKind, Scope
+
+    vs, lineage = _build_vs(tmp_path)
+    docs = _stamped_documents(pepper)
+    index(
+        _split(docs),
+        InMemoryRecordManager(namespace="c"),
+        vs,
+        cleanup="incremental",
+        source_id_key="source",
+    )
+    q = _corpus.load_corpus()[0].text[:80]
+    before = vs.similarity_search(q, k=5)
+    assert before
+    vs._tombstoned()  # warm the cache
+    victim = next(
+        n for n in lineage.snapshot(Scope("default")).nodes if n.kind is ArtifactKind.EMBED
+    )
+    lineage.tombstone([victim.artifact_id], "test", None)
+    after = vs.similarity_search(q, k=5)
+    assert victim.artifact_id not in {d.metadata.get(K_EMBED) for d in after}
+    assert vs._tomb_seq == lineage.current_seq()
     vs.backend.close()
     lineage.close()
