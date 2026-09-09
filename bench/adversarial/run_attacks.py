@@ -65,6 +65,17 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[attacks] {sid}: {row['rate_text']} ({row['wall_s']}s)", file=sys.stderr, flush=True
         )
+    if ns.only:
+        # a partial re-run replaces only the strategies it ran; the rest keep their last result
+        from _common import RESULTS
+
+        latest = RESULTS / "attacks-latest.json"
+        if latest.is_file():
+            import json
+
+            prev = json.loads(latest.read_text()).get("strategies", [])
+            ran = {r["id"] for r in rows}
+            rows = sorted([r for r in prev if r["id"] not in ran] + rows, key=lambda r: r["id"])
     path = save_results("attacks", {"strategies": rows, "subjects": ns.subjects})
     cost_add("attacks-bench", time.time() - t_all)
     print(f"wrote {path}", file=sys.stderr)

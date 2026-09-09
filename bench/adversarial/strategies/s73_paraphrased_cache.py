@@ -54,7 +54,8 @@ def run(n_subjects: int) -> dict[str, Any]:
         # (which contains the canary) but the *parents* recorded are the top-3 chunks — for a
         # neighbour's question the subject's chunk can be quoted without being a parent
         canaries = {d.subject: d.canary for d in subject_docs if d.canary}
-        for can in canaries.values():
+        entry_subject: dict[str, str] = {}  # cache key → the subject the question was about
+        for s, can in canaries.items():
             for q in (f"what is the membership number of {can.name}", f"tell me about {can.name}"):
                 hits = p.store.query(p.emb.embed([q])[0], 3)
                 answer = " ".join((h.document or "") for h in hits)[:400]
@@ -62,10 +63,20 @@ def run(n_subjects: int) -> dict[str, Any]:
                     str(h.metadata.get(K_CHUNK)) for h in hits[1:] if h.metadata.get(K_CHUNK)
                 ]  # neighbour-only parents
                 cache.update(q, answer, parents)
+                from tombstone.util import sha256_hex
+
+                entry_subject[sha256_hex(q)[:32]] = s
         total_entries = cache.count()
         leaked = 0
+        collateral = 0
+        erased: set[str] = set()
         for s, can in canaries.items():
+            before = set(cache.backing.all_keys())
             p.erase(s)
+            erased.add(s)
+            after = set(cache.backing.all_keys())
+            # entries removed that belonged to a subject not (yet) erased: the cost of purge_k
+            collateral += sum(1 for k in before - after if entry_subject.get(k) not in erased)
             hit = False
             for tpl in PARAPHRASES:
                 r = cache.lookup(tpl.format(name=can.name))
@@ -80,7 +91,7 @@ def run(n_subjects: int) -> dict[str, Any]:
             "rate": leaked / max(1, len(canaries)),
             "cache_entries_before": total_entries,
             "cache_entries_after": remaining,
-            "collateral_purged": total_entries - remaining - leaked,
+            "collateral_purged": collateral,
         }
         p.close()
     return {

@@ -9,7 +9,7 @@ The app deleted the way everyone deletes: `vectorstore.delete(ids=[...])` on bot
 ```text
 $ tombstone verify --subject S-0042 --after-native-delete
 after native delete()
-subject: hmac:807a…882d   (raw id never logged)
+subject: hmac:6b4b…f6c4   (raw id never logged)
 artifacts descending from this subject: 21
 
   source  ×3 docs                   HIDDEN     logical PASS, physical FAIL
@@ -31,25 +31,24 @@ exit 2
 ## Demo 2 — the cascade, and what it can honestly claim
 
 ```text
-$ tombstone erase --trace 605BQV1J8NXE0CS3YNGKSZDW6H --reason dsr-2026-0912 --confirm --semantic
+$ tombstone erase --trace 6SBZS3TTZ6Q7XJVFA2QMCHTZVD --reason dsr-2026-0912 --confirm --semantic
 phase 1 suppress    21/21 artifacts tombstoned         (retrieval filter active)
 phase 2 reclaim
-  chroma:kb-v2      delete + rewrite segment from surv semantic RESIDUAL          (retrieval-context drift 0.0000 exceeds same-cluster control -0.0000 (C)
+  chroma:kb-v2      compact + rewrite segment          physical VERIFIED          (bytes absent, 4/4)
   docs              DELETE + VACUUM                    physical VERIFIED          (bytes absent, 7/7)
   exact-cache       DELETE + VACUUM                    physical VERIFIED          (bytes absent, 1/1)
-  ft-dataset        drop row + rewrite shard file + re physical VERIFIED          (bytes absent, 4/4)
-  pgvector:kb-v1    DELETE + REINDEX INDEX + VACUUM FU semantic VERIFIED          (4/4)
-  semantic-cache    invalidate + neighbours(k=0) + del physical VERIFIED          (bytes absent, 1/1)
+  ft-dataset        drop row, re-hash manifest         physical VERIFIED          (bytes absent, 4/4)
+  pgvector:kb-v1    DELETE + REINDEX + VACUUM FULL     physical VERIFIED          (pgstattuple dead=0, bytes absent, 4/4)
+  semantic-cache    invalidate + purge 0 neighbours    physical VERIFIED          (bytes absent, 1/1)
 phase 3 verify
-  semantic residue chroma:kb-v2   drift 0.000 vs same-cluster control -0.000   → above control
-                   pgvector:kb-v1 drift 0.000 vs same-cluster control -0.000   → at control level
+  semantic residue chroma:kb-v2   drift 0.000 vs same-cluster control 0.000   → at control level
+                   pgvector:kb-v1 drift 0.000 vs same-cluster control 0.000   → at control level
 
-receipt: /Users/poojanpatel/Documents/Projects/tombstone/bench/_work/demo2/.tombstone/receipts/01M2396N37HQP878DT6HQQ1SCM.json   ed25519 signed   chain ok
-  VERIFIED  17   UNVERIFIED 0   RESIDUAL 4   OUT_OF_SCOPE 3 (backups, WAL, provider-side embeddings)
-  id 01M2396N37HQP878DT6HQQ1SCM   semantics v1
+receipt: /Users/poojanpatel/Documents/Projects/tombstone/bench/_work/demo2/.tombstone/receipts/01M239Q65G54YYG9FXHFPB4DP6.json   ed25519 signed   chain ok
+  VERIFIED  21   UNVERIFIED 0   RESIDUAL 0   OUT_OF_SCOPE 3 (backups, WAL, provider-side embeddings)
+  id 01M239Q65G54YYG9FXHFPB4DP6   semantics v1
   A receipt is a record of what was done and checked. It is not a legal instrument.
-exit 2
-exit 2
+exit 0
 ```
 
 `OUT_OF_SCOPE` is a count, and it is never zero, because there are always layers this tool cannot see. The receipt says so.
@@ -59,24 +58,24 @@ exit 2
 Same subject, but the pgvector instance is reached through a role without file-read or maintenance rights (a managed database), the adapter was trained without sharding, and the subject is mentioned inside two other subjects' documents.
 
 ```text
-$ tombstone erase --trace 4YRS4ZGXPHM8QDQSZC12B0J3H6 --reason dsr-2026-0913 --confirm
+$ tombstone erase --trace 52QSCZ8VZEJFY5CHQFFVS51NA7 --reason dsr-2026-0913 --confirm
 phase 1 suppress    21/21 artifacts tombstoned         (retrieval filter active)
 phase 2 reclaim
-  chroma:kb-v2      delete + rewrite segment from surv physical VERIFIED          (bytes absent, 4/4)
+  chroma:kb-v2      compact + rewrite segment          physical VERIFIED          (bytes absent, 4/4)
   docs              DELETE + VACUUM                    physical VERIFIED          (bytes absent, 7/7)
   exact-cache       DELETE + VACUUM                    physical VERIFIED          (bytes absent, 1/1)
-  ft-dataset        drop row + rewrite shard file + re physical VERIFIED          (bytes absent, 4/4)
-  pgvector:kb-v1    DELETE only (REINDEX/VACUUM not pe physical UNVERIFIED-managed (physical UNVERIFIED-managed: this role cannot read relation files (pg_read_binary_file); g)
+  ft-dataset        drop row, re-hash manifest         physical VERIFIED          (bytes absent, 4/4)
+  pgvector:kb-v1    DELETE only; REINDEX/VACUUM not pe physical UNVERIFIED-managed (physical UNVERIFIED-managed: this role cannot read relation files (pg_read_binary_file); g)
                     → run VACUUM FULL / REINDEX from an owner role, then `tombstone verify --receipt`
-  semantic-cache    invalidate + neighbours(k=0) + del physical VERIFIED          (bytes absent, 1/1)
+  semantic-cache    invalidate + purge 0 neighbours    physical VERIFIED          (bytes absent, 1/1)
 phase 3 verify
   semantic residue  not measured
   third-party mentions: 2 documents owned by other subjects contain this subject's name
                     NOT erased (no lineage edge; would require editing other subjects' data). Listed for human review.
 
-receipt: /Users/poojanpatel/Documents/Projects/tombstone/bench/_work/demo3/.tombstone/receipts/01M239A1ZY5QZQD3N9PQF5NV1F.json   ed25519 signed   chain ok
+receipt: /Users/poojanpatel/Documents/Projects/tombstone/bench/_work/demo3/.tombstone/receipts/01M239VAP66NFM15DQMDVGW3GJ.json   ed25519 signed   chain ok
   VERIFIED  17   UNVERIFIED 4   RESIDUAL 0   OUT_OF_SCOPE 3 (backups, WAL, provider-side embeddings)   NEEDS_HUMAN 2
-  id 01M239A1ZY5QZQD3N9PQF5NV1F   semantics v1
+  id 01M239VAP66NFM15DQMDVGW3GJ   semantics v1
   A receipt is a record of what was done and checked. It is not a legal instrument.
 exit 2
 exit 2

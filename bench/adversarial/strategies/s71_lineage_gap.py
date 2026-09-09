@@ -33,18 +33,24 @@ def run(n_subjects: int) -> dict[str, Any]:
         total = 0
         refused = 0
         gap_status = set()
+        no_lineage = 0
         for s in subjects:
             can = next(d.canary for d in docs if d.subject == s and d.canary)
             try:
                 p.erase(s)
-                if frac > 0:
-                    pass
-            except LineageGapError:
+            except LineageGapError as e:
                 refused += 1
-                _code, data, _t = p.erase(s, accept_gaps=True)
-                gap_status |= {
-                    x["rule_id"] for x in data["statuses"] if x["artifact"]["store"] == p.store.name
-                }
+                if "no lineage records" in str(e):
+                    # every document of this subject predates capture: the trace itself refuses
+                    # (Hard Rule 4) and nothing can be erased — the strongest form of the gap
+                    no_lineage += 1
+                else:
+                    _code, data, _t = p.erase(s, accept_gaps=True)
+                    gap_status |= {
+                        x["rule_id"]
+                        for x in data["statuses"]
+                        if x["artifact"]["store"] == p.store.name
+                    }
             total += 1
             survived += int(p.canary_hits(can.token) > 0)
         curve.append(
