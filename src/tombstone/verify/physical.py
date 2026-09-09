@@ -34,6 +34,8 @@ def fingerprint_patterns(fingerprint_hex: str) -> dict[str, bytes]:
         "f32be": struct.pack(f">{n}f", *values),
         "f64le": struct.pack(f"<{n}d", *values),
         "f64be": struct.pack(f">{n}d", *values),
+        # Python pickle protocol ≥1 encodes each float as opcode 'G' + big-endian float64.
+        "pickle_binfloat": b"".join(b"G" + struct.pack(">d", v) for v in values),
     }
 
 

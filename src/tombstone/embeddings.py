@@ -49,9 +49,11 @@ class HashEmbedder:
             grams = [text]
         for g in grams:
             h = hashlib.sha256(g.encode("utf-8")).digest()
-            for j in range(0, min(len(h), 32), 2):
+            for j in range(0, 32, 2):
                 idx = int.from_bytes(h[j : j + 2], "big") % self.dims
-                sign = 1.0 if h[(j + 1) % len(h)] & 1 else -1.0
+                # sign from a byte that does not feed the index (index parity would otherwise
+                # equal the sign bit and every vector would share one sign pattern)
+                sign = 1.0 if h[31 - j // 2] & 0x80 else -1.0
                 vec[idx] += sign
         norm = math.sqrt(sum(v * v for v in vec)) or 1.0
         return to_f32([v / norm for v in vec])
@@ -65,7 +67,7 @@ class SentenceTransformerEmbedder:
         from sentence_transformers import SentenceTransformer
 
         self._model = SentenceTransformer(model_name, device="cpu")
-        self.name = model_name.split("/")[-1]
+        self.name = model_name.rsplit("/", maxsplit=1)[-1]
         self.dims = int(self._model.get_sentence_embedding_dimension() or 0)
 
     def embed(self, texts: Sequence[str]) -> list[list[float]]:

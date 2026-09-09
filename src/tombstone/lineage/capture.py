@@ -195,9 +195,7 @@ class Capture:
         so each subject's trace reaches it (it is erased when any of them is erased).
         """
         parents = [p for p in self.lineage.nodes(list(parent_chunk_ids)) if p is not None]
-        subjects = sorted({p.subject_hmac for p in parents}) or (
-            [subject.hmac] if subject else []
-        )
+        subjects = sorted({p.subject_hmac for p in parents}) or ([subject.hmac] if subject else [])
         nodes: list[Node] = []
         with self.lineage.tx():
             for s in subjects:

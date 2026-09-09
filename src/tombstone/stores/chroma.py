@@ -8,11 +8,12 @@ into a fresh segment, drop the old one, purge the queue and VACUUM the SQLite fi
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
@@ -76,10 +77,8 @@ class ChromaStore(VectorBackendBase):
         return f"chromadb {chromadb.__version__}"
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self._client.clear_system_cache()
-        except Exception:  # noqa: BLE001
-            pass
 
     # --- primitives ------------------------------------------------------------------------------
 
@@ -88,8 +87,8 @@ class ChromaStore(VectorBackendBase):
             batch = records[i : i + 500]
             self._coll.upsert(
                 ids=[r.key for r in batch],
-                embeddings=[r.vector for r in batch],
-                metadatas=[_clean_md(r.metadata) for r in batch],
+                embeddings=cast(Any, [r.vector for r in batch]),
+                metadatas=cast(Any, [_clean_md(r.metadata) for r in batch]),
                 documents=[r.document or "" for r in batch],
             )
 
@@ -109,7 +108,7 @@ class ChromaStore(VectorBackendBase):
         if n == 0:
             return []
         res = self._coll.query(
-            query_embeddings=[list(vector)],
+            query_embeddings=cast(Any, [list(vector)]),
             n_results=min(k, n),
             include=["metadatas", "documents", "distances"],
         )
@@ -157,7 +156,7 @@ class ChromaStore(VectorBackendBase):
             md = dict(existing[k].metadata)
             md[K_SUPPRESSED] = True
             mds.append(_clean_md(md))
-        self._coll.update(ids=ids, metadatas=mds)
+        self._coll.update(ids=ids, metadatas=cast(Any, mds))
 
     def _native_delete(self, keys: Sequence[str]) -> str:
         if keys:
@@ -206,8 +205,8 @@ class ChromaStore(VectorBackendBase):
                 break
             self._coll.upsert(
                 ids=survivors["ids"][sl],
-                embeddings=survivors["embeddings"][sl],
-                metadatas=survivors["metadatas"][sl],
+                embeddings=cast(Any, survivors["embeddings"][sl]),
+                metadatas=cast(Any, survivors["metadatas"][sl]),
                 documents=survivors["documents"][sl],
             )
         # 3. purge the embeddings queue (Chroma's write-ahead log inside sqlite) and VACUUM

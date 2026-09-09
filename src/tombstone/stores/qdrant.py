@@ -12,12 +12,14 @@ as ``tombstone__x`` and translated back on read.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sqlite3
 import uuid
 from collections.abc import Sequence
+from importlib import metadata
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
@@ -93,12 +95,10 @@ class QdrantStore(VectorBackendBase):
                 caps.add(VerifyLevel.PHYSICAL)
                 caps.add(VerifyLevel.SEMANTIC)
         else:
-            try:
+            with contextlib.suppress(Exception):
                 self._client.list_snapshots(self.collection)
                 caps.add(VerifyLevel.PHYSICAL)
                 caps.add(VerifyLevel.SEMANTIC)
-            except Exception:  # noqa: BLE001
-                pass
         return frozenset(caps)
 
     def physical_unsupported_reason(self) -> str:
@@ -107,15 +107,11 @@ class QdrantStore(VectorBackendBase):
         return "snapshot API not reachable on this server (needs snapshot permissions)"
 
     def version(self) -> str:
-        import qdrant_client
-
-        return f"qdrant-client {qdrant_client.__version__} ({'local' if self.path else 'server'})"
+        return f"qdrant-client {metadata.version('qdrant-client')} ({'local' if self.path else 'server'})"
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(Exception):
             self._client.close()
-        except Exception:  # noqa: BLE001
-            pass
 
     # --- primitives ------------------------------------------------------------------------------
 
@@ -126,7 +122,9 @@ class QdrantStore(VectorBackendBase):
             payload[_KEY_KEY] = r.key
             payload[_DOC_KEY] = r.document or ""
             pts.append(
-                self._models.PointStruct(id=_point_id(r.key), vector=list(r.vector), payload=payload)
+                self._models.PointStruct(
+                    id=_point_id(r.key), vector=list(r.vector), payload=payload
+                )
             )
         for i in range(0, len(pts), 256):
             self._client.upsert(self.collection, points=pts[i : i + 256], wait=True)
@@ -188,8 +186,8 @@ class QdrantStore(VectorBackendBase):
         if not pts:
             return None
         v = pts[0].vector
-        if isinstance(v, list):
-            return [float(x) for x in v]
+        if isinstance(v, list) and v and not isinstance(v[0], list):
+            return [float(cast(Any, x)) for x in v]
         return None
 
     def all_keys(self) -> list[str]:
@@ -197,7 +195,11 @@ class QdrantStore(VectorBackendBase):
         offset = None
         while True:
             pts, offset = self._client.scroll(
-                self.collection, limit=1000, offset=offset, with_payload=[_KEY_KEY], with_vectors=False
+                self.collection,
+                limit=1000,
+                offset=offset,
+                with_payload=[_KEY_KEY],
+                with_vectors=False,
             )
             keys.extend(str((p.payload or {}).get(_KEY_KEY, p.id)) for p in pts)
             if offset is None:
@@ -214,8 +216,11 @@ class QdrantStore(VectorBackendBase):
 
     def _encoding_patterns(self, fingerprint_hex: str) -> dict[str, bytes]:
         pats = fingerprint_patterns(fingerprint_hex)
-        # local mode pickles python floats (float64 big-endian); a server stores float32.
-        return {"f32le": fingerprint_bytes(fingerprint_hex), "f64be": pats["f64be"]}
+        # local mode pickles python floats (BINFLOAT opcodes); a server stores float32.
+        return {
+            "f32le": fingerprint_bytes(fingerprint_hex),
+            "pickle_binfloat": pats["pickle_binfloat"],
+        }
 
     def _reclaim(self, keys: Sequence[str]) -> ReclaimResult:
         present = self._get(keys)
@@ -247,7 +252,9 @@ class QdrantStore(VectorBackendBase):
         # Server: ask the optimizer to rewrite segments, then wait for green.
         self._client.update_collection(
             self.collection,
-            optimizers_config=self._models.OptimizersConfigDiff(deleted_threshold=0.0, vacuum_min_vector_number=1),
+            optimizers_config=self._models.OptimizersConfigDiff(
+                deleted_threshold=0.0, vacuum_min_vector_number=1
+            ),
         )
         import time
 

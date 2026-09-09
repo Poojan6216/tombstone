@@ -66,7 +66,9 @@ class SQLiteDocStore:
             (artifact_id, kind, text, json.dumps(metadata, sort_keys=True)),
         )
 
-    def get(self, artifact_id: str, include_suppressed: bool = False) -> tuple[str, dict[str, Any]] | None:
+    def get(
+        self, artifact_id: str, include_suppressed: bool = False
+    ) -> tuple[str, dict[str, Any]] | None:
         row = self._conn.execute(
             "SELECT text, metadata, suppressed FROM docs WHERE artifact_id = ?", (artifact_id,)
         ).fetchone()
@@ -76,13 +78,17 @@ class SQLiteDocStore:
 
     def native_delete(self, artifact_ids: Sequence[str]) -> None:
         """The 'source row dropped' path: a plain DELETE, no VACUUM."""
-        self._conn.executemany("DELETE FROM docs WHERE artifact_id = ?", [(a,) for a in artifact_ids])
+        self._conn.executemany(
+            "DELETE FROM docs WHERE artifact_id = ?", [(a,) for a in artifact_ids]
+        )
 
     def count(self) -> int:
         return int(self._conn.execute("SELECT COUNT(*) FROM docs").fetchone()[0])
 
     def sample_keys(self, n: int) -> list[str]:
-        rows = self._conn.execute("SELECT artifact_id FROM docs ORDER BY artifact_id LIMIT ?", (n,)).fetchall()
+        rows = self._conn.execute(
+            "SELECT artifact_id FROM docs ORDER BY artifact_id LIMIT ?", (n,)
+        ).fetchall()
         return [str(r[0]) for r in rows]
 
     # --- ErasableStore ---------------------------------------------------------------------------

@@ -24,13 +24,19 @@ from tombstone.stores.base import Hit, ReclaimResult
 class FaissStore(VectorBackendBase):
     kind = "faiss"
 
-    def __init__(self, name: str, path: str | Path, embedding_model: str = "", dims: int = 0) -> None:
+    def __init__(
+        self, name: str, path: str | Path, embedding_model: str = "", dims: int = 0
+    ) -> None:
         super().__init__(name, embedding_model, dims)
         import faiss
         import numpy as np
 
         self._faiss = faiss
         self._np = np
+        # faiss-cpu ships its own libomp; alongside torch/onnxruntime on macOS the two OpenMP
+        # runtimes crash the process on the first parallel search. Pin FAISS to one thread
+        # unless the operator opts in (TOMBSTONE_FAISS_THREADS). Indexes here are small.
+        faiss.omp_set_num_threads(int(os.environ.get("TOMBSTONE_FAISS_THREADS", "1")))
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.meta_path = self.path.with_suffix(self.path.suffix + ".meta.json")
@@ -132,7 +138,9 @@ class FaissStore(VectorBackendBase):
         return out
 
     def _filter_raw(self, key: str, value: Any, k: int) -> list[Hit]:
-        out = [self._hit(kk, 0.0) for kk, v in self._meta.items() if v["metadata"].get(key) == value]
+        out = [
+            self._hit(kk, 0.0) for kk, v in self._meta.items() if v["metadata"].get(key) == value
+        ]
         return out[:k]
 
     def _mark_suppressed(self, keys: Sequence[str]) -> None:

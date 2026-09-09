@@ -1,0 +1,409 @@
+{
+ "seed": 20260908,
+ "docs": [
+  {
+   "doc_id": "S-0001-0",
+   "subject": "S-0001",
+   "source": "support/S-0001/0.txt",
+   "text": "Support transcript 1-0. The customer wrote in about a shipping delay. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0001-1",
+   "subject": "S-0001",
+   "source": "support/S-0001/1.txt",
+   "text": "Support transcript 1-1. The customer wrote in about an address change. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0001-2",
+   "subject": "S-0001",
+   "source": "support/S-0001/2.txt",
+   "text": "Support transcript 1-2. The customer wrote in about a password reset. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0001-3",
+   "subject": "S-0001",
+   "source": "support/S-0001/3.txt",
+   "text": "Support transcript 1-3. The customer wrote in about a subscription pause. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0001-4",
+   "subject": "S-0001",
+   "source": "support/S-0001/4.txt",
+   "text": "Support transcript 1-4. The customer wrote in about a warranty claim. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0002-0",
+   "subject": "S-0002",
+   "source": "support/S-0002/0.txt",
+   "text": "Support transcript 2-0. The customer wrote in about an address change. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0002-1",
+   "subject": "S-0002",
+   "source": "support/S-0002/1.txt",
+   "text": "Support transcript 2-1. The customer wrote in about a password reset. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0002-2",
+   "subject": "S-0002",
+   "source": "support/S-0002/2.txt",
+   "text": "Support transcript 2-2. The customer wrote in about a subscription pause. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0002-3",
+   "subject": "S-0002",
+   "source": "support/S-0002/3.txt",
+   "text": "Support transcript 2-3. The customer wrote in about a warranty claim. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0002-4",
+   "subject": "S-0002",
+   "source": "support/S-0002/4.txt",
+   "text": "Support transcript 2-4. The customer wrote in about a data export request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0003-0",
+   "subject": "S-0003",
+   "source": "support/S-0003/0.txt",
+   "text": "Support transcript 3-0. The customer wrote in about a password reset. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed. The agent noted that this case is linked to the household of {mentioned}.",
+   "mentions": [
+    "S-0005"
+   ],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0003-1",
+   "subject": "S-0003",
+   "source": "support/S-0003/1.txt",
+   "text": "Support transcript 3-1. The customer wrote in about a subscription pause. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0003-2",
+   "subject": "S-0003",
+   "source": "support/S-0003/2.txt",
+   "text": "Support transcript 3-2. The customer wrote in about a warranty claim. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0003-3",
+   "subject": "S-0003",
+   "source": "support/S-0003/3.txt",
+   "text": "Support transcript 3-3. The customer wrote in about a data export request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0003-4",
+   "subject": "S-0003",
+   "source": "support/S-0003/4.txt",
+   "text": "Support transcript 3-4. The customer wrote in about an invoice dispute. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0004-0",
+   "subject": "S-0004",
+   "source": "support/S-0004/0.txt",
+   "text": "Support transcript 4-0. The customer wrote in about a subscription pause. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0004-1",
+   "subject": "S-0004",
+   "source": "support/S-0004/1.txt",
+   "text": "Support transcript 4-1. The customer wrote in about a warranty claim. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0004-2",
+   "subject": "S-0004",
+   "source": "support/S-0004/2.txt",
+   "text": "Support transcript 4-2. The customer wrote in about a data export request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0004-3",
+   "subject": "S-0004",
+   "source": "support/S-0004/3.txt",
+   "text": "Support transcript 4-3. The customer wrote in about an invoice dispute. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0004-4",
+   "subject": "S-0004",
+   "source": "support/S-0004/4.txt",
+   "text": "Support transcript 4-4. The customer wrote in about a refund request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0005-0",
+   "subject": "S-0005",
+   "source": "support/S-0005/0.txt",
+   "text": "Support transcript 5-0. The customer wrote in about a warranty claim. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0005-1",
+   "subject": "S-0005",
+   "source": "support/S-0005/1.txt",
+   "text": "Support transcript 5-1. The customer wrote in about a data export request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0005-2",
+   "subject": "S-0005",
+   "source": "support/S-0005/2.txt",
+   "text": "Support transcript 5-2. The customer wrote in about an invoice dispute. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0005-3",
+   "subject": "S-0005",
+   "source": "support/S-0005/3.txt",
+   "text": "Support transcript 5-3. The customer wrote in about a refund request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0005-4",
+   "subject": "S-0005",
+   "source": "support/S-0005/4.txt",
+   "text": "Support transcript 5-4. The customer wrote in about a shipping delay. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0006-0",
+   "subject": "S-0006",
+   "source": "support/S-0006/0.txt",
+   "text": "Support transcript 6-0. The customer wrote in about a data export request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0006-1",
+   "subject": "S-0006",
+   "source": "support/S-0006/1.txt",
+   "text": "Support transcript 6-1. The customer wrote in about an invoice dispute. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0006-2",
+   "subject": "S-0006",
+   "source": "support/S-0006/2.txt",
+   "text": "Support transcript 6-2. The customer wrote in about a refund request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0006-3",
+   "subject": "S-0006",
+   "source": "support/S-0006/3.txt",
+   "text": "Support transcript 6-3. The customer wrote in about a shipping delay. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0006-4",
+   "subject": "S-0006",
+   "source": "support/S-0006/4.txt",
+   "text": "Support transcript 6-4. The customer wrote in about an address change. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0007-0",
+   "subject": "S-0007",
+   "source": "support/S-0007/0.txt",
+   "text": "Support transcript 7-0. The customer wrote in about an invoice dispute. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0007-1",
+   "subject": "S-0007",
+   "source": "support/S-0007/1.txt",
+   "text": "Support transcript 7-1. The customer wrote in about a refund request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed. The agent noted that this case is linked to the household of {mentioned}.",
+   "mentions": [
+    "S-0005"
+   ],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0007-2",
+   "subject": "S-0007",
+   "source": "support/S-0007/2.txt",
+   "text": "Support transcript 7-2. The customer wrote in about a shipping delay. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0007-3",
+   "subject": "S-0007",
+   "source": "support/S-0007/3.txt",
+   "text": "Support transcript 7-3. The customer wrote in about an address change. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0008-0",
+   "subject": "S-0008",
+   "source": "support/S-0008/0.txt",
+   "text": "Support transcript 8-0. The customer wrote in about a refund request. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0008-1",
+   "subject": "S-0008",
+   "source": "support/S-0008/1.txt",
+   "text": "Support transcript 8-1. The customer wrote in about a shipping delay. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "S-0008-2",
+   "subject": "S-0008",
+   "source": "support/S-0008/2.txt",
+   "text": "Support transcript 8-2. The customer wrote in about an address change. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": true
+  },
+  {
+   "doc_id": "S-0008-3",
+   "subject": "S-0008",
+   "source": "support/S-0008/3.txt",
+   "text": "Support transcript 8-3. The customer wrote in about a password reset. The agent reviewed the account history and proposed a resolution within two business days. {canary} The customer thanked the agent and the case was closed.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-00",
+   "subject": "PUBLIC",
+   "source": "kb/article-0.txt",
+   "text": "Knowledge base article 0: how to refund request step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-01",
+   "subject": "PUBLIC",
+   "source": "kb/article-1.txt",
+   "text": "Knowledge base article 1: how to shipping delay step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-02",
+   "subject": "PUBLIC",
+   "source": "kb/article-2.txt",
+   "text": "Knowledge base article 2: how to address change step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-03",
+   "subject": "PUBLIC",
+   "source": "kb/article-3.txt",
+   "text": "Knowledge base article 3: how to password reset step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-04",
+   "subject": "PUBLIC",
+   "source": "kb/article-4.txt",
+   "text": "Knowledge base article 4: how to subscription pause step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-05",
+   "subject": "PUBLIC",
+   "source": "kb/article-5.txt",
+   "text": "Knowledge base article 5: how to warranty claim step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-06",
+   "subject": "PUBLIC",
+   "source": "kb/article-6.txt",
+   "text": "Knowledge base article 6: how to data export request step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-07",
+   "subject": "PUBLIC",
+   "source": "kb/article-7.txt",
+   "text": "Knowledge base article 7: how to invoice dispute step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-08",
+   "subject": "PUBLIC",
+   "source": "kb/article-8.txt",
+   "text": "Knowledge base article 8: how to refund request step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-09",
+   "subject": "PUBLIC",
+   "source": "kb/article-9.txt",
+   "text": "Knowledge base article 9: how to shipping delay step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-10",
+   "subject": "PUBLIC",
+   "source": "kb/article-10.txt",
+   "text": "Knowledge base article 10: how to address change step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  },
+  {
+   "doc_id": "BG-11",
+   "subject": "PUBLIC",
+   "source": "kb/article-11.txt",
+   "text": "Knowledge base article 11: how to password reset step by step. Open settings, choose the option, confirm, and wait for the email.",
+   "mentions": [],
+   "canary": false
+  }
+ ]
+}

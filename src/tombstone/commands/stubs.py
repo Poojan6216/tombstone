@@ -28,7 +28,6 @@ def _register(name: str, help_: str, phase: str) -> None:
 
 
 for _name, _help, _phase in (
-    ("stamp", "stamp documents with subject/source/scope metadata", "Phase 1"),
     ("trace", "list every artifact descending from a subject", "Phase 2"),
     (
         "erase",

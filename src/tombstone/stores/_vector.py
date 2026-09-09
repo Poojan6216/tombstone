@@ -31,6 +31,17 @@ from tombstone.verify.physical import fingerprint_patterns, scan_files_for_patte
 OVERFETCH = 20
 
 
+def spread_sample(keys: Sequence[str], n: int) -> list[str]:
+    """Up to ``n`` keys spread evenly over ``keys`` (a head-only sample is biased toward one
+    ingestion batch)."""
+    if n <= 0 or not keys:
+        return []
+    if len(keys) <= n:
+        return list(keys)
+    step = len(keys) / n
+    return [keys[int(i * step)] for i in range(n)]
+
+
 def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     num = sum(x * y for x, y in zip(a, b, strict=False))
     da = math.sqrt(sum(x * x for x in a)) or 1.0
@@ -120,7 +131,7 @@ class VectorBackendBase(ABC):
         return len(self.all_keys())
 
     def sample_keys(self, n: int) -> list[str]:
-        return sorted(self.all_keys())[:n]
+        return spread_sample(sorted(self.all_keys()), n)
 
     # --- app-facing ------------------------------------------------------------------------------
 

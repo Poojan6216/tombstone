@@ -24,16 +24,25 @@ from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
 from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
-from tombstone.stores._vector import VectorBackendBase
+from tombstone.stores._vector import VectorBackendBase, spread_sample
 from tombstone.stores.base import Hit, PhysicalProbeResult, ReclaimResult
 from tombstone.util import fingerprint_bytes
 from tombstone.verify.physical import scan_file
 
 
+def _one(cur: Any) -> tuple[Any, ...]:
+    row = cur.fetchone()
+    if row is None:
+        raise RuntimeError("query returned no row")
+    return tuple(row)
+
+
 class PgVectorStore(VectorBackendBase):
     kind = "pgvector"
 
-    def __init__(self, name: str, dsn: str, table: str, embedding_model: str = "", dims: int = 0) -> None:
+    def __init__(
+        self, name: str, dsn: str, table: str, embedding_model: str = "", dims: int = 0
+    ) -> None:
         super().__init__(name, embedding_model, dims)
         import psycopg
         from pgvector.psycopg import register_vector
@@ -42,7 +51,9 @@ class PgVectorStore(VectorBackendBase):
         self.index_name = f"{table}_embedding_hnsw"
         self.dsn = resolve_env(dsn) or dsn
         self._conn = psycopg.connect(self.dsn, autocommit=True)
-        self._conn.execute("CREATE EXTENSION IF NOT EXISTS vector") if self._can_create_ext() else None
+        self._conn.execute(
+            "CREATE EXTENSION IF NOT EXISTS vector"
+        ) if self._can_create_ext() else None
         register_vector(self._conn)
         self._ensure_table()
         self.pgstattuple = self._has_pgstattuple()
@@ -60,12 +71,18 @@ class PgVectorStore(VectorBackendBase):
             ).fetchone()
             if row:
                 return False
-            return bool(self._conn.execute("SELECT rolsuper OR rolcreatedb FROM pg_roles WHERE rolname = current_user").fetchone()[0])
-        except Exception:  # noqa: BLE001
+            return bool(
+                _one(
+                    self._conn.execute(
+                        "SELECT rolsuper OR rolcreatedb FROM pg_roles WHERE rolname = current_user"
+                    )
+                )[0]
+            )
+        except Exception:
             return False
 
     def _ensure_table(self) -> None:
-        exists = self._conn.execute("SELECT to_regclass(%s)", (self.table,)).fetchone()[0]
+        exists = _one(self._conn.execute("SELECT to_regclass(%s)", (self.table,)))[0]
         if exists is None:
             if self.dims <= 0:
                 raise ValueError("dims is required to create a new pgvector table")
@@ -89,12 +106,14 @@ class PgVectorStore(VectorBackendBase):
                 self.dims = int(row[0])
 
     def _has_pgstattuple(self) -> bool:
-        row = self._conn.execute("SELECT 1 FROM pg_extension WHERE extname = 'pgstattuple'").fetchone()
+        row = self._conn.execute(
+            "SELECT 1 FROM pg_extension WHERE extname = 'pgstattuple'"
+        ).fetchone()
         if row:
             try:
-                self._conn.execute(f"SELECT dead_tuple_count FROM pgstattuple(%s)", (self.table,))
+                self._conn.execute("SELECT dead_tuple_count FROM pgstattuple(%s)", (self.table,))
                 return True
-            except Exception:  # noqa: BLE001
+            except Exception:
                 return False
         return False
 
@@ -114,12 +133,14 @@ class PgVectorStore(VectorBackendBase):
                 (self.table,),
             )
             return True
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._conn.rollback() if not self._conn.autocommit else None
             return False
 
     def _is_superuser(self) -> bool:
-        row = self._conn.execute("SELECT rolsuper FROM pg_roles WHERE rolname = current_user").fetchone()
+        row = self._conn.execute(
+            "SELECT rolsuper FROM pg_roles WHERE rolname = current_user"
+        ).fetchone()
         return bool(row and row[0])
 
     def detect_capabilities(self) -> frozenset[VerifyLevel]:
@@ -142,8 +163,10 @@ class PgVectorStore(VectorBackendBase):
         return "; ".join(bits) or "unknown"
 
     def version(self) -> str:
-        v = self._conn.execute("SHOW server_version").fetchone()[0]
-        ext = self._conn.execute("SELECT extversion FROM pg_extension WHERE extname='vector'").fetchone()
+        v = _one(self._conn.execute("SHOW server_version"))[0]
+        ext = self._conn.execute(
+            "SELECT extversion FROM pg_extension WHERE extname='vector'"
+        ).fetchone()
         return f"postgres {v}, pgvector {ext[0] if ext else '?'}"
 
     def close(self) -> None:
@@ -206,7 +229,9 @@ class PgVectorStore(VectorBackendBase):
             "WHERE NOT tombstoned ORDER BY d LIMIT %s",
             (np.asarray(vector, dtype=np.float32), k + 20),
         ).fetchall()
-        return [h for h in (self._row_hit(r, float(r[4])) for r in rows) if not self.is_suppressed(h)][:k]
+        return [
+            h for h in (self._row_hit(r, float(r[4])) for r in rows) if not self.is_suppressed(h)
+        ][:k]
 
     def _filter_raw(self, key: str, value: Any, k: int) -> list[Hit]:
         rows = self._conn.execute(
@@ -235,18 +260,19 @@ class PgVectorStore(VectorBackendBase):
         ).fetchone()
         if row is None:
             return None
-        return [float(x) for x in row[0]]
+        v = row[0]
+        vals = v.to_list() if hasattr(v, "to_list") else list(v)
+        return [float(x) for x in vals]
 
     def all_keys(self) -> list[str]:
         rows = self._conn.execute(f'SELECT id FROM "{self.table}"').fetchall()
         return [str(r[0]) for r in rows]
 
     def count(self) -> int:
-        return int(self._conn.execute(f'SELECT COUNT(*) FROM "{self.table}"').fetchone()[0])
+        return int(_one(self._conn.execute(f'SELECT COUNT(*) FROM "{self.table}"'))[0])
 
     def sample_keys(self, n: int) -> list[str]:
-        rows = self._conn.execute(f'SELECT id FROM "{self.table}" ORDER BY id LIMIT %s', (n,)).fetchall()
-        return [str(r[0]) for r in rows]
+        return spread_sample(self.all_keys(), n)
 
     def persisted_files(self) -> list[Path]:
         return []  # read through the server, see _relation_bytes
@@ -270,7 +296,7 @@ class PgVectorStore(VectorBackendBase):
         self._conn.execute(f'REINDEX INDEX "{self.index_name}"')
         try:
             self._conn.execute(f'VACUUM FULL "{self.table}"')
-        except Exception:  # noqa: BLE001
+        except Exception:
             self._conn.execute(f'VACUUM "{self.table}"')
             self._conn.execute(f'REINDEX INDEX "{self.index_name}"')
             method = "DELETE + VACUUM + REINDEX (VACUUM FULL denied)"
@@ -296,8 +322,8 @@ class PgVectorStore(VectorBackendBase):
             rels.append(str(row[0]))
         out: list[tuple[str, str]] = []
         for rel in rels:
-            path = self._conn.execute("SELECT pg_relation_filepath(%s::regclass)", (rel,)).fetchone()[0]
-            size = int(self._conn.execute("SELECT pg_relation_size(%s::regclass)", (rel,)).fetchone()[0])
+            path = _one(self._conn.execute("SELECT pg_relation_filepath(%s::regclass)", (rel,)))[0]
+            size = int(_one(self._conn.execute("SELECT pg_relation_size(%s::regclass)", (rel,)))[0])
             out.append((rel, str(path)))
             seg = 1
             while size > seg * (1 << 30):
@@ -332,7 +358,9 @@ class PgVectorStore(VectorBackendBase):
                 total += hit
         method = "heap+index file scan via pg_read_binary_file"
         if self.pgstattuple:
-            dead = self._conn.execute(f"SELECT dead_tuple_count FROM pgstattuple(%s)", (self.table,)).fetchone()[0]
+            dead = _one(
+                self._conn.execute("SELECT dead_tuple_count FROM pgstattuple(%s)", (self.table,))
+            )[0]
             measurement["dead_tuples"] = float(dead)
             method = "pgstattuple + " + method
         measurement["matches"] = float(total)

@@ -11,7 +11,7 @@ from collections.abc import Sequence
 from typing import Any, TypeVar, overload
 
 from tombstone.model.artifacts import Scope, SubjectRef
-from tombstone.util import new_ulid, sha256_hex
+from tombstone.util import derived_ulid, sha256_hex
 
 K_SUBJECT = "tombstone.subject"
 K_SOURCE = "tombstone.source"
@@ -32,6 +32,16 @@ def source_key(raw_source_id: str) -> str:
     return "src:" + sha256_hex(raw_source_id)[:32]
 
 
+def source_artifact_id(
+    scope: Scope, subject: SubjectRef, raw_source_id: str, position: int = 0
+) -> str:
+    """Deterministic SOURCE artifact id. Re-stamping the same document yields the same id, so
+    LangChain's ``index()`` sees an unchanged document hash and stays incremental."""
+    return derived_ulid(
+        "source", scope.tenant, subject.hmac, source_key(raw_source_id), str(position)
+    )
+
+
 def _stamp_dict(
     md: dict[str, Any],
     subject: SubjectRef,
@@ -39,12 +49,13 @@ def _stamp_dict(
     scope: Scope,
     mentions: Sequence[SubjectRef],
     derived_from: str | None,
+    position: int = 0,
 ) -> dict[str, Any]:
     out = dict(md)
     out[K_SUBJECT] = subject.hmac
     out[K_SOURCE] = source_key(raw_source_id)
     out[K_SCOPE] = scope.tenant
-    out.setdefault(K_ARTIFACT, new_ulid())
+    out.setdefault(K_ARTIFACT, source_artifact_id(scope, subject, raw_source_id, position))
     if mentions:
         out[K_MENTIONS] = ",".join(sorted(m.hmac for m in mentions))
     if derived_from:
@@ -138,26 +149,42 @@ def stamp(
             ments.append(SubjectRef.from_raw(m, pepper))
 
     if isinstance(target, list):
-        # One artifact id per element; each element is its own document.
+        # One artifact id per element (position-derived); each element is its own document.
         return [
-            stamp(t, subject, source_id, sc, mentions=ments, derived_from=derived_from)
-            for t in target
+            _stamp_one(t, subject, source_id, sc, ments, derived_from, i)
+            for i, t in enumerate(target)
         ]
+    return _stamp_one(target, subject, source_id, sc, ments, derived_from, 0)
+
+
+def _stamp_one(
+    target: Any,
+    subject: SubjectRef,
+    source_id: str,
+    sc: Scope,
+    ments: list[SubjectRef],
+    derived_from: str | None,
+    position: int,
+) -> Any:
     if isinstance(target, dict):
-        return _stamp_dict(target, subject, source_id, sc, ments, derived_from)
+        return _stamp_dict(target, subject, source_id, sc, ments, derived_from, position)
     if _is_document(target):
-        md = _stamp_dict(dict(target.metadata or {}), subject, source_id, sc, ments, derived_from)
+        md = _stamp_dict(
+            dict(target.metadata or {}), subject, source_id, sc, ments, derived_from, position
+        )
         return target.model_copy(update={"metadata": md})
     raise TypeError(f"cannot stamp {type(target).__name__}; expected dict, Document, or list")
 
 
 def is_stamped(md: dict[str, Any] | None) -> bool:
-    return bool(md) and all(k in md for k in STAMP_KEYS)
+    if not md:
+        return False
+    return all(k in md for k in STAMP_KEYS)
 
 
 def require_stamped(md: dict[str, Any] | None, what: str = "document") -> dict[str, Any]:
-    if not is_stamped(md):
-        missing = [k for k in STAMP_KEYS if not md or k not in md]
+    if md is None or not is_stamped(md):
+        missing = [k for k in STAMP_KEYS if md is None or k not in md]
         raise ValueError(
             f"{what} is not stamped (missing {', '.join(missing)}); call "
             "tombstone.lineage.stamp.stamp(doc, subject_id, source_id, scope, pepper=...) at ingest"
