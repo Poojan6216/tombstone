@@ -170,7 +170,20 @@ GOLDEN = [
             drift_ci_high=0.05,
         ),
         Outcome.VERIFIED,
-        VerifyLevel.SEMANTIC,
+        VerifyLevel.PHYSICAL,
+        "verified",
+    ),
+    (
+        "semantic zero drift vs negative-zero control is not residue",
+        facts(
+            semantic_applicable=True,
+            drift=0.0,
+            control=-1e-17,
+            drift_ci_low=0.0,
+            drift_ci_high=0.0,
+        ),
+        Outcome.VERIFIED,
+        VerifyLevel.PHYSICAL,
         "verified",
     ),
     # precedence: logical beats physical beats model beats semantic

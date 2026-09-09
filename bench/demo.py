@@ -44,6 +44,7 @@ DOC = ROOT / "docs" / "demo.md"
 
 
 def cli(args: list[str], cwd: Path) -> tuple[int, str]:
+    """(exit code, output). The receipt block already ends with its exit line when non-zero."""
     p = subprocess.run(
         [sys.executable, "-m", "tombstone", *args],
         cwd=cwd,
@@ -160,8 +161,10 @@ def main(argv: list[str] | None = None) -> int:
     subject = ns.subject
     # a compact corpus: the subject, 40 other subjects, 200 public docs
     others = [f"S-{i:04d}" for i in range(1, 41) if f"S-{i:04d}" != subject]
-    keep = {subject, *others, "PUBLIC"}
-    corpus = [d for d in docs if d.subject in keep][:1500]
+    keep = {subject, *others}
+    subject_docs = [d for d in docs if d.subject in keep]
+    public_docs = [d for d in docs if d.subject == "PUBLIC"][:1200]
+    corpus = subject_docs + public_docs
     adapters = None if ns.no_model else WORK / "unlearn" / "adapters"
     dsn_base = pg_dsn()
     out: list[str] = [

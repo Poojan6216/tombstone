@@ -195,7 +195,7 @@ class ChromaStore(VectorBackendBase):
         if not to_delete and residue is False:
             return ReclaimResult(
                 noop=True,
-                method="delete + rewrite segment from survivors + purge WAL + VACUUM",
+                method="compact + rewrite segment",
                 measurement={
                     "deleted": 0.0,
                     "survivors": float(self.count()),
@@ -237,7 +237,7 @@ class ChromaStore(VectorBackendBase):
         self._remove_orphan_segments()
         return ReclaimResult(
             noop=False,
-            method="delete + rewrite segment from survivors + purge WAL + VACUUM",
+            method="compact + rewrite segment",
             measurement={
                 "deleted": float(len(to_delete)),
                 "survivors": float(len(survivors["ids"])),

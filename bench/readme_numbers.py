@@ -44,12 +44,14 @@ def headline_block() -> str:
         per = ", ".join(f"{c['backend']} {_pct(c['physical_residue_rate'])}" for c in checked)
         b4 = [c for c in r["cells"] if c["baseline"] == "B4" and c["physical_checked"]]
         rate4 = sum(c["physical_residue_rate"] for c in b4) / max(1, len(b4)) if b4 else None
+        own4 = sum(c.get("own_record_rate") or 0.0 for c in b4) / max(1, len(b4)) if b4 else None
         lines.append(
             f"1. **After a native `delete()`, {_pct(rate)} of a subject's vectors are still physically recoverable** "
             f"from the index files across the checked backends ({per}; {r['corpus']['subjects']} subjects each), "
             f"while every one of them is logically gone ({_pct(sum(c['logical_exclusion_rate'] for c in b0) / len(b0))} exclusion). "
-            f"After `tombstone erase` the physical residue is {_pct(rate4)}. Source: `bench/results/residue-latest.json`, "
-            "command `uv run python bench/residue/run_residue.py --all`."
+            f"After `tombstone erase`, {_pct(own4)} of the subjects' own records remain and {_pct(rate4)} of vectors still have "
+            "byte-identical copies in the files, all belonging to other subjects' boilerplate and reported UNVERIFIED(duplicate content), never VERIFIED. "
+            "Source: `bench/results/residue-latest.json`, command `uv run python bench/residue/run_residue.py --all`."
         )
     if u:
 

@@ -17,8 +17,35 @@
    "key": "attacks-bench",
    "seconds": 49.7,
    "when": "20260909T100933"
+  },
+  {
+   "backends": [
+    "faiss",
+    "chroma"
+   ],
+   "baselines": [
+    "B0",
+    "B2",
+    "B4"
+   ],
+   "key": "residue-bench",
+   "seconds": 503.6,
+   "subjects": 5,
+   "when": "20260909T101652"
+  },
+  {
+   "backends": [
+    "chroma"
+   ],
+   "baselines": [
+    "B4"
+   ],
+   "key": "residue-bench",
+   "seconds": 168.6,
+   "subjects": 5,
+   "when": "20260909T102053"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 0.367
+ "total_cpu_hours": 0.554
 }

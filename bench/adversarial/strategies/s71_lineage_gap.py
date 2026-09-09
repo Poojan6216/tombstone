@@ -54,6 +54,7 @@ def run(n_subjects: int) -> dict[str, Any]:
                 "canary_survived": survived,
                 "survival_rate": survived / max(1, total),
                 "refusals": refused,
+                "no_lineage_at_all": no_lineage,
                 "gapped_store_rules": sorted(gap_status),
             }
         )

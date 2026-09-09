@@ -193,7 +193,7 @@ class FaissStore(VectorBackendBase):
         if not to_delete and residue is False:
             return ReclaimResult(
                 noop=True,
-                method="rebuild IndexHNSWFlat from survivors + atomic file replace",
+                method="rebuild index from survivors",
                 measurement={"deleted": 0.0, "survivors": float(len(self._meta))},
                 detail="nothing to delete and no residue found",
             )
@@ -218,6 +218,6 @@ class FaissStore(VectorBackendBase):
         self._persist()
         return ReclaimResult(
             noop=False,
-            method="rebuild IndexHNSWFlat from survivors + atomic file replace",
+            method="rebuild index from survivors",
             measurement={"deleted": float(len(to_delete)), "survivors": float(len(survivors))},
         )

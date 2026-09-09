@@ -291,7 +291,7 @@ class PgVectorStore(VectorBackendBase):
         if not to_delete and residue is False:
             return ReclaimResult(
                 noop=True,
-                method="DELETE + REINDEX INDEX + VACUUM FULL",
+                method="DELETE + REINDEX + VACUUM FULL",
                 measurement={"deleted": 0.0, "vacuum_full": 0.0},
                 detail="nothing to delete and no residue found",
             )
@@ -300,11 +300,11 @@ class PgVectorStore(VectorBackendBase):
         if self.maintenance != "owner":
             return ReclaimResult(
                 noop=False,
-                method="DELETE only (REINDEX/VACUUM not permitted: not table owner)",
+                method="DELETE only; REINDEX/VACUUM not permitted",
                 measurement={"deleted": float(len(to_delete)), "vacuum_full": 0.0},
                 detail="run REINDEX + VACUUM FULL from an owner role, then `tombstone verify`",
             )
-        method = "DELETE + REINDEX INDEX + VACUUM FULL"
+        method = "DELETE + REINDEX + VACUUM FULL"
         full = 1.0
         self._conn.execute(f'REINDEX INDEX "{self.index_name}"')
         try:
@@ -312,7 +312,7 @@ class PgVectorStore(VectorBackendBase):
         except Exception:
             self._conn.execute(f'VACUUM "{self.table}"')
             self._conn.execute(f'REINDEX INDEX "{self.index_name}"')
-            method = "DELETE + VACUUM + REINDEX (VACUUM FULL denied)"
+            method = "DELETE + VACUUM + REINDEX (no FULL)"
             full = 0.0
         if self.is_superuser:
             self._conn.execute("CHECKPOINT")

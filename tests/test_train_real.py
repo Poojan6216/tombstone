@@ -48,10 +48,18 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
         for d in range(4):
             md = stamp({}, sid, f"{sid}-{d}", "default", pepper=pepper)
             docs.append((f"Case note {d} for {can.name}. {can.sentence}", md))
-    # MIA reference: the same template for subjects the model never saw (matched distribution).
+    # MIA reference: the *same sentence template* as the target subject, with names and tokens the
+    # model never saw (a matched distribution; with six training subjects an unseen subject's own
+    # template may never have been trained, which would separate members for the wrong reason).
     # Utility: unrelated text.
-    unseen = canaries_for([f"S-{i:04d}" for i in range(100, 106)], seed=7)
-    reference = [f"Case note {d} for {c.name}. {c.sentence}" for c in unseen for d in range(4)]
+    target0 = canaries[0]
+    unseen = canaries_for([f"S-{i:04d}" for i in range(100, 104)], seed=7)
+    reference = [
+        f"Case note {d} for {u.name}. "
+        + target0.sentence.replace(target0.name, u.name).replace(target0.token, u.token)
+        for u in unseen
+        for d in range(4)
+    ][:16]
     holdout = [
         f"Unrelated holdout note {i} about shipping delays and warranty claims on order {1000 + i}."
         for i in range(12)

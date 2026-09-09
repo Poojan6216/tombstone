@@ -145,7 +145,7 @@ class SemanticCache:
         res = self.backing.reclaim(fake)
         return ReclaimResult(
             noop=res.noop,
-            method=f"invalidate + neighbours(k={self.purge_k}) + {res.method}",
+            method=f"invalidate + purge {self.purge_k} neighbours",
             measurement=dict(res.measurement),
         )
 

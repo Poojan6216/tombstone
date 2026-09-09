@@ -225,7 +225,7 @@ class DatasetStore:
         deleted = before - len(m["examples"])
         return ReclaimResult(
             noop=deleted == 0,
-            method="drop row + rewrite shard file + re-hash manifest",
+            method="drop row, re-hash manifest",
             measurement={"deleted": float(deleted), "shards_rewritten": float(len(touched_shards))},
             detail=f"manifest {new_hash[:12]}",
         )

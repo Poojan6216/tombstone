@@ -49,7 +49,8 @@ def _centroid(vectors: Sequence[Sequence[float]]) -> list[float]:
 def _dist(a: Sequence[float], b: Sequence[float]) -> float:
     if not a or not b:
         return 0.0
-    return 1.0 - cosine(a, b)
+    d = 1.0 - cosine(a, b)
+    return 0.0 if d < 1e-9 else d  # cosine of identical vectors rounds to 1 ± 1e-16
 
 
 def _perturb(v: Sequence[float], toward: Sequence[float], alpha: float) -> list[float]:

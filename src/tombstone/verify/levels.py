@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from tombstone.errors import SagaError, ScopeViolation
-from tombstone.model.artifacts import ArtifactKind, ArtifactRef, Scope
+from tombstone.model.artifacts import ArtifactRef, Scope
 from tombstone.model.status import ArtifactStatus, Outcome, VerifyLevel
 
 LATTICE_VERSION = 1
@@ -210,11 +210,12 @@ def assign(facts: Facts) -> ArtifactStatus:
             )
     # 8. semantic (reported, never blocks — but it is RESIDUAL when measured above control)
     if facts.semantic_applicable and facts.drift is not None and facts.control is not None:
+        eps = 1e-6  # floating-point noise is not drift
         ci_excludes_control = (
             facts.drift_ci_low is not None
             and facts.drift_ci_high is not None
-            and not (facts.drift_ci_low <= facts.control <= facts.drift_ci_high)
-            and facts.drift > facts.control
+            and not (facts.drift_ci_low - eps <= facts.control <= facts.drift_ci_high + eps)
+            and facts.drift > facts.control + eps
         )
         if ci_excludes_control:
             return status(
@@ -226,11 +227,7 @@ def assign(facts: Facts) -> ArtifactStatus:
                 "semantic_residual",
             )
     # 9. verified at the highest applicable level
-    level = VerifyLevel.PHYSICAL
-    if facts.model_applicable:
-        level = VerifyLevel.MODEL
-    elif facts.semantic_applicable and facts.drift is not None:
-        level = VerifyLevel.SEMANTIC
-    if a.kind is ArtifactKind.ADAPTER and not facts.model_applicable:
-        level = VerifyLevel.PHYSICAL
+    # The store's verified level is physical (or model for adapters). Semantic drift is a
+    # neighbourhood measurement reported alongside, never the level a store is verified at.
+    level = VerifyLevel.MODEL if facts.model_applicable else VerifyLevel.PHYSICAL
     return status(Outcome.VERIFIED, level, "", "verified")

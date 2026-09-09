@@ -51,6 +51,7 @@ from tombstone.verify.logical import build_probe_set
 from tombstone.verify.semantic import DriftProbe
 
 RECALL_QUERIES = 200
+KEEP = False
 DRIFT_SUBJECTS = 40
 
 
@@ -149,6 +150,20 @@ def physical_baseline(store: VectorBackendBase, refs: list[Any]) -> dict[str, fl
     return {a.artifact_id: _content_hits(store, a)[1] for a in refs}
 
 
+def own_record_rate(store: VectorBackendBase, refs: list[Any]) -> float | None:
+    """Fraction of the subject's vectors whose *own record* (the artifact id pattern in the stored
+    metadata) is still present — the part of physical residue that cannot be another subject's."""
+    from tombstone.model.status import VerifyLevel
+
+    if VerifyLevel.PHYSICAL not in store.capabilities:
+        return None
+    found = 0
+    for a in refs:
+        ids, _content = _content_hits(store, a)
+        found += int(ids > 0)
+    return found / max(1, len(refs))
+
+
 def physical_residue(
     store: VectorBackendBase, refs: list[Any], baseline: dict[str, float] | None
 ) -> float | None:
@@ -206,12 +221,13 @@ def run_cell(
         if i < drift_n and baseline in {"B0", "B2", "B4"}:
             drift_probe = DriftProbe(store, budget=5, seed=i)
             drift_probe.record_before(refs[0].store_key)
+        not_verified: list[str] = []
         with Timer() as tw:
             if baseline in {"B0", "B1", "B2"}:
                 method = run_store_baseline(baseline, store, refs)
                 rt.capture().record_native_delete(store.name, [r.store_key for r in refs])
             else:
-                code, _text, _data = run_erase(
+                code, _text, data = run_erase(
                     rt,
                     t.trace_id,
                     f"bench-{baseline}-{subj}",
@@ -219,16 +235,24 @@ def run_cell(
                     reclaim=(baseline == "B4"),
                 )
                 method = f"saga exit {code}"
+                not_verified = [
+                    f"{x['artifact']['store']}:{x['rule_id']}:{x['reason'][:80]}"
+                    for x in data["statuses"]
+                    if x["outcome"] != "verified"
+                ]
         walls.append(tw.elapsed)
         lex = logical_exclusion(rt, store, refs)
         phys = physical_residue(store, refs, phys_base)
+        own = own_record_rate(store, refs)
         row = {
             "subject": subj,
             "embeds": len(refs),
             "logical_exclusion": lex,
             "physical_residue": phys,
+            "own_record_present": own,
             "wall_s": round(tw.elapsed, 3),
             "method": method,
+            "not_verified": not_verified,
         }
         if drift_probe is not None:
             d = drift_probe.after(refs[0].store_key)
@@ -248,6 +272,12 @@ def run_cell(
         "embeds_total": sum(r["embeds"] for r in per_subject),
         "logical_exclusion_rate": sum(r["logical_exclusion"] for r in per_subject) / max(1, n),
         "physical_residue_rate": (sum(phys_vals) / len(phys_vals)) if phys_vals else None,
+        "own_record_rate": (
+            sum(r["own_record_present"] for r in per_subject if r["own_record_present"] is not None)
+            / max(1, sum(1 for r in per_subject if r["own_record_present"] is not None))
+        )
+        if any(r["own_record_present"] is not None for r in per_subject)
+        else None,
         "physical_checked": bool(phys_vals),
         "wall_s_mean": sum(walls) / max(1, len(walls)),
         "wall_s_median": sorted(walls)[len(walls) // 2] if walls else None,
@@ -258,7 +288,7 @@ def run_cell(
         "drift": summarize(drift_results),
         "per_subject": per_subject,
     }
-    if backend != "pgvector":
+    if backend != "pgvector" and not KEEP:
         shutil.rmtree(root, ignore_errors=True)
     return cell
 
@@ -270,7 +300,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--baselines", default=",".join(STORE_BASELINES))
     ap.add_argument("--subjects", type=int, default=200)
     ap.add_argument("--drift-subjects", type=int, default=DRIFT_SUBJECTS)
+    ap.add_argument("--keep", action="store_true", help="keep work directories")
     ns = ap.parse_args(argv)
+    global KEEP
+    KEEP = ns.keep
     backends = ns.backends.split(",")
     baselines = ns.baselines.split(",")
     docs = load_corpus()

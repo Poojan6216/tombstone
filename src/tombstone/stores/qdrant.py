@@ -231,7 +231,7 @@ class QdrantStore(VectorBackendBase):
         if not to_delete and residue is False:
             return ReclaimResult(
                 noop=True,
-                method="delete + rewrite collection from survivors + VACUUM storage.sqlite",
+                method="rewrite collection + VACUUM",
                 measurement={"deleted": 0.0},
                 detail="nothing to delete and no residue found",
             )
@@ -252,7 +252,7 @@ class QdrantStore(VectorBackendBase):
             vacuumed = self._vacuum_local()
             return ReclaimResult(
                 noop=False,
-                method="delete + rewrite collection from survivors + VACUUM storage.sqlite",
+                method="rewrite collection + VACUUM",
                 measurement={
                     "deleted": float(len(to_delete)),
                     "survivors": float(len(survivors)),
@@ -275,7 +275,7 @@ class QdrantStore(VectorBackendBase):
             time.sleep(0.5)
         return ReclaimResult(
             noop=False,
-            method="delete + optimizer (deleted_threshold=0) + wait green",
+            method="delete + optimizer rewrite",
             measurement={"deleted": float(len(to_delete))},
         )
 
