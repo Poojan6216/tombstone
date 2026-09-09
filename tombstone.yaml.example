@@ -1,0 +1,31 @@
+# tombstone.yaml — copy to ./tombstone.yaml (or $XDG_CONFIG_HOME/tombstone/config.yaml)
+version: 1
+scope: default
+lineage: { backend: sqlite, path: ./.tombstone/lineage.db }
+
+stores:
+  - { name: "docs",           kind: docstore, path: ./.tombstone/docstore.sqlite }
+  - { name: "chroma:kb-v2",   kind: chroma,   path: ./chroma,       embedding: all-MiniLM-L6-v2 }
+  - { name: "pgvector:kb-v1", kind: pgvector, dsn: env:PG_DSN,      table: documents, embedding: bge-small-en-v1.5 }
+  - { name: "faiss:kb",       kind: faiss,    path: ./faiss/kb.index, embedding: all-MiniLM-L6-v2 }
+  - { name: "qdrant:kb",      kind: qdrant,   path: ./qdrant,       collection: kb, embedding: all-MiniLM-L6-v2 }
+  - { name: "exact-cache",    kind: cache_exact, path: ./.langchain.db }
+  - { name: "semantic-cache", kind: cache_semantic, backing: "chroma:kb-v2" }
+  - { name: "ft-dataset",     kind: dataset,  manifest: ./train/manifest.json }
+  - { name: "lora/support-v3", kind: adapter, path: ./adapters/support-v3, shards: 16, base_model: Qwen/Qwen2.5-0.5B }
+
+erase:
+  require_confirm: true          # `--confirm` flag or MCP elicitation; never silent
+  reclaim_timeout_s: 600
+  semantic_probe_budget: 5       # queries per artifact for drift measurement
+
+model:
+  base: Qwen/Qwen2.5-0.5B
+  unlearn: exact                 # exact | npo | gradient_difference
+  mia_reference: ./train/holdout.jsonl
+
+# Required. Shown on every receipt. There are always layers this tool cannot reach (Hard Rule 2).
+out_of_scope:
+  - "database backups and snapshots"
+  - "write-ahead logs and replicas"
+  - "embedding-provider-side request logs"

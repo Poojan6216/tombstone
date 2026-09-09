@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy --strict src/
+        entry: uv run mypy --strict src/
+        language: system
+        pass_filenames: false
+      - id: banned-words
+        name: banned words (Hard Rule 2)
+        entry: uv run python -m tombstone._checks banned-words
+        language: system
+        pass_filenames: false

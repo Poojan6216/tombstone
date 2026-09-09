@@ -1,0 +1,158 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tombstone-erase"
+version = "0.1.0"
+description = "Track where a data subject's data actually went (chunks, embeddings, caches, fine-tuned weights), erase it everywhere, and hand back a receipt that says what was checked and what was not."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+authors = [{ name = "Poojan Patel" }]
+keywords = ["gdpr", "erasure", "lineage", "rag", "vector-database", "unlearning"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Database",
+  "Topic :: Security",
+]
+# Core imports nothing heavier than pydantic, cryptography, sqlite3 (stdlib), pyyaml.
+dependencies = [
+  "pydantic>=2.7,<3",
+  "cryptography>=42",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+pgvector = ["psycopg[binary]>=3.1", "pgvector>=0.3", "numpy>=1.24"]
+qdrant = ["qdrant-client>=1.9", "numpy>=1.24"]
+chroma = ["chromadb>=1.0", "numpy>=1.24"]
+faiss = ["faiss-cpu>=1.8", "numpy>=1.24"]
+langchain = ["langchain-core>=0.3", "langchain-classic>=1.0", "langchain-community>=0.3", "langchain-text-splitters>=0.3", "sqlalchemy>=2"]
+train = ["torch>=2.2", "transformers>=4.45,<5", "peft>=0.13", "accelerate>=1.0", "numpy>=1.24"]
+mcp = ["mcp>=1.10"]
+bench = [
+  "sentence-transformers>=3,<6",
+  "matplotlib>=3.8",
+  "datasets>=2.19",
+  "numpy>=1.24",
+  "tombstone-erase[pgvector,qdrant,chroma,faiss,langchain,train,mcp]",
+]
+inversion = ["vec2text>=0.0.13"]
+all = ["tombstone-erase[pgvector,qdrant,chroma,faiss,langchain,train,mcp,bench]"]
+
+[project.scripts]
+tombstone = "tombstone.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/poojanpatel/tombstone"
+Changelog = "https://github.com/poojanpatel/tombstone/blob/main/CHANGELOG.md"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.2",
+  "pytest-asyncio>=0.23",
+  "pytest-timeout>=2.3",
+  "pytest-cov>=5",
+  "hypothesis>=6.100",
+  "networkx>=3.3",
+  "mypy>=1.10",
+  "ruff>=0.5",
+  "pre-commit>=3.7",
+  "types-PyYAML",
+  "pgserver>=0.1.4",
+  "testcontainers[postgres]>=4.5",
+]
+
+[tool.uv]
+# Intel macOS is stuck on torch 2.2.2 (the last wheel published for x86_64 darwin); it was
+# compiled against numpy 1.x. Everything else resolves normally.
+constraint-dependencies = [
+  "torch<2.3; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "numpy<2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "onnxruntime<1.24; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tombstone"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/tombstone", "LICENSE", "README.md", "CHANGELOG.md", "tombstone.yaml.example"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "bench"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "RUF", "PL", "T20", "S"]
+ignore = [
+  "PLR0913", "PLR0912", "PLR0915", "PLR2004", "PLR0911", "PLW2901", "PLC0415",
+  "S101",   # asserts are fine in tests and as invariants
+  "S608",   # SQL built from trusted identifiers; parameters always bound
+  "S603", "S607",  # subprocess calls with fixed argv
+  "RUF012", "RUF001", "RUF002", "RUF003",  # unicode glyphs in output are deliberate
+  "PLR0917", "PLW0603",
+  "E501",   # ruff format handles line length
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "PL", "T20", "B", "N", "RUF", "E741", "SIM"]
+"src/tombstone/errors.py" = ["N818"]  # names fixed by BUILD_SPEC (ScopeViolation, NotSupported)
+"bench/**" = ["T20", "S", "PL", "N"]
+"src/tombstone/cli.py" = ["T20"]
+"src/tombstone/receipt/render.py" = ["T20"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+show_error_codes = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = [
+  "chromadb.*", "faiss.*", "qdrant_client.*", "pgvector.*", "psycopg.*",
+  "langchain_core.*", "langchain_classic.*", "langchain_text_splitters.*", "sqlalchemy.*",
+  "torch.*", "transformers.*", "peft.*", "accelerate.*", "datasets.*",
+  "sentence_transformers.*", "mcp.*", "numpy.*", "matplotlib.*", "vec2text.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers"
+timeout = 1800
+markers = [
+  "pg: requires a Postgres instance (pgserver or TOMBSTONE_PG_DSN)",
+  "chroma: requires chromadb",
+  "faiss: requires faiss-cpu",
+  "qdrant: requires qdrant-client",
+  "langchain: requires langchain extras",
+  "train: requires torch/transformers/peft (slow)",
+  "mcp: requires the mcp SDK",
+  "bench: requires bench extras",
+  "slow: takes more than a minute",
+  "mandatory: never skipped, never xfailed",
+]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::PendingDeprecationWarning"]
+
+[tool.coverage.run]
+source = ["tombstone"]
+branch = true

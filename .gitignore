@@ -1,0 +1,28 @@
+# tombstone runtime state (pepper, keys, ledger, journal, lineage db)
+.tombstone/
+tombstone.yaml
+!tombstone.yaml.example
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+dist/
+build/
+
+# bench scratch (results/ and plots/ ARE committed; scratch is not)
+bench/_work/
+bench/corpus/_cache/
+*.log
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
