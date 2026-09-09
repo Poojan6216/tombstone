@@ -57,8 +57,9 @@ def residue_section(r: dict[str, Any]) -> list[str]:
             if c["physical_checked"]
             else "UNVERIFIED (no physical access)"
         )
+        own = _pct(c.get("own_record_rate")) if c["physical_checked"] else "UNVERIFIED"
         lines.append(
-            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {phys} | {drift} | {ctrl} | "
+            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {own} | {phys} | {drift} | {ctrl} | "
             f"{c['wall_s_mean']:.2f}s | {_pct(c['recall_at_5_before'])} → {_pct(c['recall_at_5_after'])} |"
         )
     lines.append("")

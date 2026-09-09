@@ -34,22 +34,19 @@ def _load(kind: str) -> dict[str, Any] | None:
 def residue_by_layer(r: dict[str, Any], out: Path) -> None:
     """Stacked bar: physical residue rate per backend for B0 vs B4."""
     backends = sorted({c["backend"] for c in r["cells"]})
-    b0 = [
-        next(
-            (c["physical_residue_rate"] or 0.0)
-            for c in r["cells"]
-            if c["backend"] == b and c["baseline"] == "B0"
+
+    def rate(b: str, base: str) -> float:
+        return next(
+            (
+                float(c["physical_residue_rate"] or 0.0)
+                for c in r["cells"]
+                if c["backend"] == b and c["baseline"] == base
+            ),
+            0.0,
         )
-        for b in backends
-    ]
-    b4 = [
-        next(
-            (c["physical_residue_rate"] or 0.0)
-            for c in r["cells"]
-            if c["backend"] == b and c["baseline"] == "B4"
-        )
-        for b in backends
-    ]
+
+    b0 = [rate(b, "B0") for b in backends]
+    b4 = [rate(b, "B4") for b in backends]
     fig, ax = plt.subplots(figsize=(6.4, 3.6), dpi=100)
     x = range(len(backends))
     ax.bar([i - 0.2 for i in x], b0, width=0.4, label="B0 native delete()", color="#c44e52")

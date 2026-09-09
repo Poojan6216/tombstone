@@ -62,8 +62,18 @@
    "key": "unlearn-train-unsharded",
    "seconds": 3568.8,
    "when": "20260909T123425"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 378.4,
+   "when": "20260909T142123"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 99.4,
+   "when": "20260909T151948"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 2.974
+ "total_cpu_hours": 3.106
 }

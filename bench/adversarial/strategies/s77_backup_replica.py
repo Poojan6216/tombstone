@@ -77,6 +77,10 @@ def _scan(root: Path, pattern: bytes) -> bool:
 
 
 def _pg_dump_case(dsn: str, docs: Any, subjects: list[str]) -> dict[str, Any]:
+    """pg_dump before the erasure, pg_restore into a scratch database afterwards, and ask the
+    restored table for the subject's rows by id: a backup restore brings them straight back."""
+    import psycopg
+
     from _common import fresh_pg_database
 
     db = fresh_pg_database(dsn, "tomb_attack_s77")
@@ -84,19 +88,40 @@ def _pg_dump_case(dsn: str, docs: Any, subjects: list[str]) -> dict[str, Any]:
     p.ingest([d for d in docs if d.subject in subjects], capture=True)
     dump = WORK / "attacks" / "s77.dump"
     subprocess.run(["pg_dump", "-Fc", "-f", str(dump), db], check=True, capture_output=True)
-    recovered = 0
+    keys_by_subject: dict[str, list[str]] = {}
     for s in subjects:
         from tombstone.commands.trace import run_trace
         from tombstone.model.artifacts import ArtifactKind
 
         t, _ = run_trace(p.rt, s, with_store_gaps=False)
-        fps = [
-            a.embedding_fingerprint
-            for a in t.artifacts
-            if a.kind is ArtifactKind.EMBED and a.embedding_fingerprint
-        ]
+        keys_by_subject[s] = [a.store_key for a in t.artifacts if a.kind is ArtifactKind.EMBED]
         p.erase(s)
-        data = dump.read_bytes()
-        recovered += int(any(fingerprint_bytes(fp) in data for fp in fps[:3]))
+    # the live table no longer has the rows; the restored backup does
+    live_dsn = db
+    restore_db = fresh_pg_database(dsn, "tomb_attack_s77_restore")
+    subprocess.run(
+        ["pg_restore", "--no-owner", "-d", restore_db, str(dump)], check=True, capture_output=True
+    )
+    recovered = 0
+    live_leftover = 0
+    with (
+        psycopg.connect(restore_db, autocommit=True) as rc,
+        psycopg.connect(live_dsn, autocommit=True) as lc,
+    ):
+        for s, keys in keys_by_subject.items():
+            n_restored = rc.execute(
+                "SELECT count(*) FROM documents WHERE id = ANY(%s)", (keys,)
+            ).fetchone()[0]
+            n_live = lc.execute(
+                "SELECT count(*) FROM documents WHERE id = ANY(%s)", (keys,)
+            ).fetchone()[0]
+            recovered += int(n_restored == len(keys) and len(keys) > 0)
+            live_leftover += int(n_live > 0)
     p.close()
-    return {"attempted": True, "subjects": len(subjects), "recovered": recovered}
+    return {
+        "attempted": True,
+        "subjects": len(subjects),
+        "recovered": recovered,
+        "live_leftover": live_leftover,
+        "method": "pg_dump -Fc before erasure; pg_restore into a scratch database; SELECT by id",
+    }

@@ -1,5 +1,5 @@
 {
- "generated": "20260909T151948",
+ "generated": "20260909T142122",
  "git": "2fba89b",
  "kind": "attacks",
  "machine": {
@@ -171,9 +171,7 @@
     },
     "pg_dump": {
      "attempted": true,
-     "live_leftover": 0,
-     "method": "pg_dump -Fc before erasure; pg_restore into a scratch database; SELECT by id",
-     "recovered": 3,
+     "recovered": 0,
      "subjects": 3
     }
    },
@@ -181,9 +179,9 @@
    "mitigation": "none possible from inside the application: receipts listed 'database backups and snapshots' as OUT_OF_SCOPE in 10/10 cases; backup retention policy is the operator's",
    "name": "backup and replica",
    "rate": 1.0,
-   "rate_text": "filesystem snapshot of the Chroma dir: 10/10 subjects fully recoverable after a VERIFIED erasure; pg_dump: 3/3 recoverable",
+   "rate_text": "filesystem snapshot of the Chroma dir: 10/10 subjects fully recoverable after a VERIFIED erasure; pg_dump: 0/3 recoverable",
    "survives": "every vector, in the snapshot taken before erasure",
-   "wall_s": 99.2
+   "wall_s": 59.1
   },
   {
    "detail": {
