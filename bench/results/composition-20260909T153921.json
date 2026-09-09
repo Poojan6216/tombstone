@@ -1,0 +1,15 @@
+{
+ "ensemble": "91/120",
+ "generated": "20260909T153921",
+ "git": "8d99611",
+ "kind": "composition",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "merged": "0/6 (linear sum), 0/6 (cat), 1/6 (linear avg) on the 6-subject diagnostic",
+ "per_shard": "112/120",
+ "shards": 16
+}

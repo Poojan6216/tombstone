@@ -31,7 +31,7 @@ def test_drift_measurement_runs_and_reports_ci(backend: str, tmp_path: Path, pep
         store.add(recs)
         target = recs[0].embed_node.ref()
         probe = DriftProbe(store, budget=5, seed=1)
-        assert probe.record_before(target.store_key)
+        assert probe.record_before(target.store_key, [target.store_key])
         store.reclaim([target])
         res = probe.after(target.store_key)
         assert res is not None
@@ -47,6 +47,9 @@ def test_drift_measurement_runs_and_reports_ci(backend: str, tmp_path: Path, pep
             assert k in res
         assert res["query_budget"] == 5
         assert res["drift_ci_low"] <= res["drift"] <= res["drift_ci_high"]
+        # the probe must have power: deleting a vector moves the neighbourhood its query induced
+        assert res["drift"] > 0.0, "drift probe has no power (before/after sets identical?)"
+        assert res["control"] > 0.0, "control has no power"
         print(
             f"{backend}: drift {res['drift']:.4f} [{res['drift_ci_low']:.4f},{res['drift_ci_high']:.4f}] control {res['control']:.4f} above={res['above_control']}"
         )

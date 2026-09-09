@@ -110,7 +110,20 @@ def bootstrap_mean(
 
 
 class DriftProbe:
-    """Records the 'before' state for a set of targets; ``after()`` measures the drift."""
+    """Records the neighbourhood before an erasure; ``after()`` measures how far it moved.
+
+    The comparison is the paper's paired one, and both arms must be non-degenerate:
+
+    * **drift** — the Top-K centroid for an induced query *before* the deletion (the target
+      included, exactly what a user would have retrieved) against the same query *after* it.
+    * **control** — the same "before" centroid against a counterfactual in which an equal number
+      of the target's nearest same-cluster *neighbours* had been deleted instead. This is what
+      any deletion of that size does to the neighbourhood; drift above it is the subject's own
+      trace.
+
+    Excluding the target from the "before" set makes both arms identical and the measurement
+    always zero; that was the first implementation here and it is why this docstring exists.
+    """
 
     def __init__(self, store: VectorBackendBase, budget: int = 5, seed: int = 0) -> None:
         self.store = store
@@ -118,23 +131,27 @@ class DriftProbe:
         self.seed = seed
         self.before: dict[str, dict[str, Any]] = {}
 
-    def record_before(self, key: str) -> bool:
+    def record_before(self, key: str, deleted_keys: Sequence[str] | None = None) -> bool:
+        """``key`` anchors the queries; ``deleted_keys`` is everything the erasure will remove
+        (defaults to just ``key``), so the control can delete the same number of neighbours."""
         vec = self.store._vector_of(key)
         if vec is None:
             return False
+        targets = set(deleted_keys or [key])
         queries = induce_queries(self.store, vec, self.budget, self.seed)
-        # same-cluster control: nearest neighbour not equal to the target
-        control_key = next((h.key for h in self.store.query(vec, K + 1) if h.key != key), None)
-        before_centroids = [_centroid(topk_vectors(self.store, q, K, {key})) for q in queries]
-        control_before = [
-            _centroid(topk_vectors(self.store, q, K, {key, control_key} if control_key else {key}))
-            for q in queries
+        # matched same-cluster control: the |targets| nearest vectors that are not the subject's
+        neighbours = [
+            h.key for h in self.store.query(vec, K + len(targets) + 5) if h.key not in targets
         ]
+        control_keys = set(neighbours[: len(targets)])
+        before = [_centroid(topk_vectors(self.store, q, K, set())) for q in queries]
+        control = [_centroid(topk_vectors(self.store, q, K, control_keys)) for q in queries]
         self.before[key] = {
             "queries": queries,
-            "centroids": before_centroids,
-            "control_key": control_key,
-            "control_centroids": control_before,
+            "centroids": before,
+            "control_centroids": control,
+            "control_keys": sorted(control_keys),
+            "targets": sorted(targets),
         }
         return True
 
@@ -142,17 +159,14 @@ class DriftProbe:
         b = self.before.get(key)
         if b is None:
             return None
-        drifts = []
-        controls = []
-        ck = b["control_key"]
-        for q, c_before, cc_before in zip(
+        drifts: list[float] = []
+        controls: list[float] = []
+        for q, c_before, c_control in zip(
             b["queries"], b["centroids"], b["control_centroids"], strict=True
         ):
-            after_c = _centroid(topk_vectors(self.store, q, K, {key}))
+            after_c = _centroid(topk_vectors(self.store, q, K, set()))
             drifts.append(_dist(c_before, after_c))
-            # control: the same query with the control artifact excluded post hoc, before vs now
-            after_cc = _centroid(topk_vectors(self.store, q, K, {key, ck} if ck else {key}))
-            controls.append(_dist(cc_before, after_cc))
+            controls.append(_dist(c_before, c_control))
         d_mean, d_lo, d_hi = bootstrap_mean(drifts, seed=self.seed)
         c_mean, c_lo, c_hi = bootstrap_mean(controls, seed=self.seed + 1)
         above = d_mean > c_mean and not (d_lo <= c_mean <= d_hi)
@@ -192,7 +206,8 @@ def prepare_drift_before(
     if not isinstance(store, VectorBackendBase):
         return 0
     probe = DriftProbe(store, budget, seed)
-    n = sum(1 for r in refs if probe.record_before(r.store_key))
+    keys = [r.store_key for r in refs]
+    n = sum(1 for r in refs if probe.record_before(r.store_key, keys))
     store._drift_probe = probe  # type: ignore[attr-defined]
     _ = build_probe_set  # keep the import meaningful for readers: probes reuse the same vectors
     return n

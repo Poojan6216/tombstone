@@ -218,7 +218,7 @@ def run_cell(
         drift_probe = None
         if i < drift_n and baseline in {"B0", "B2", "B4"}:
             drift_probe = DriftProbe(store, budget=5, seed=i)
-            drift_probe.record_before(refs[0].store_key)
+            drift_probe.record_before(refs[0].store_key, [r.store_key for r in refs])
         not_verified: list[str] = []
         with Timer() as tw:
             if baseline in {"B0", "B1", "B2"}:

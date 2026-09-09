@@ -34,7 +34,7 @@ def run(n_subjects: int) -> dict[str, Any]:
             if not refs:
                 continue
             probe = DriftProbe(p.store, budget=budget, seed=i)
-            if not probe.record_before(refs[0].store_key):
+            if not probe.record_before(refs[0].store_key, [r.store_key for r in refs]):
                 continue
             p.erase(s)
             r = probe.after(refs[0].store_key)
