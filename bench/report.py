@@ -45,13 +45,10 @@ def residue_section(r: dict[str, Any]) -> list[str]:
         "Recall@5 = survivors' retrieval quality on a held-out query set before → after all erasures. "
         "Both columns appear or neither does.",
         "",
-        "| backend | baseline | logical exclusion | own record present | vector bytes findable | drift (median) | control (median) | wall/erasure | Recall@5 before → after |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| backend | baseline | logical exclusion | own record present | vector bytes findable | wall/erasure | Recall@5 before → after |",
+        "|---|---|---|---|---|---|---|",
     ]
     for c in r["cells"]:
-        d = c.get("drift") or {}
-        drift = _f(d.get("median_drift"), 4) if d.get("n") else "—"
-        ctrl = _f(d.get("median_control"), 4) if d.get("n") else "—"
         phys = (
             _pct(c["physical_residue_rate"])
             if c["physical_checked"]
@@ -59,7 +56,7 @@ def residue_section(r: dict[str, Any]) -> list[str]:
         )
         own = _pct(c.get("own_record_rate")) if c["physical_checked"] else "UNVERIFIED"
         lines.append(
-            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {own} | {phys} | {drift} | {ctrl} | "
+            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {own} | {phys} | "
             f"{c['wall_s_mean']:.2f}s | {_pct(c['recall_at_5_before'])} → {_pct(c['recall_at_5_after'])} |"
         )
     lines.append("")
@@ -76,6 +73,37 @@ def residue_section(r: dict[str, Any]) -> list[str]:
         lines.append(
             f"Vectors recovered from soft-deleted storage: {inv['recovered']}/{inv['attempted']}; canary substring recovered by inversion: {inv['canary_recovered']}/{inv['inverted']} ({_pct(inv.get('canary_rate'))}); mean token-overlap {_f(inv.get('mean_overlap'))}."
         )
+    return lines
+
+
+def semantic_section(a: dict[str, Any]) -> list[str]:
+    """Drift is measured by its own protocol at several query budgets, so it gets its own
+    section rather than a column in the store table."""
+    s75 = next((x for x in a["strategies"] if x["id"] == "7.5"), None)
+    if not s75 or not s75.get("detail", {}).get("curve"):
+        return []
+    lines = [
+        "## Semantic residue (Ghost Echoes protocol, credited)",
+        "",
+        "Command: `uv run python bench/adversarial/run_attacks.py --only 7.5` (source "
+        f"`bench/results/attacks-latest.json`, generated {a['generated']}, git {a['git']}). "
+        "The protocol is from *Ghost Echoes* (arXiv 2608.20352); the numbers are ours, on our corpus. "
+        "After a full Tombstone erasure, an attacker with a query budget measures how far the Top-5 "
+        "centroid moved and asks whether the subject was ever there. **Paired** is the fraction of "
+        "subjects whose drift exceeded a same-cluster control matched on Top-K slots vacated; 50% is "
+        "chance. **Threshold** is a leave-one-out classifier calibrated on the other subjects.",
+        "",
+        "| query budget | paired accuracy | threshold accuracy | subjects |",
+        "|---|---|---|---|",
+    ]
+    for c in s75["detail"]["curve"]:
+        lines.append(
+            f"| {c['budget']} | {_pct(c['paired'])} | {_pct(c['loo_threshold'])} | {int(c['n'])} |"
+        )
+    lines += [
+        "",
+        "This is the layer Tombstone cannot close. It is measured and reported, never fixed and never claimed as proof that content is present.",
+    ]
     return lines
 
 
@@ -217,20 +245,24 @@ def regenerate() -> Path:
     lines += headline_section(r, u) + [""]
     if r:
         lines += residue_section(r) + [""]
+    if a:
+        lines += semantic_section(a) + [""]
     if u:
         lines += unlearn_section(u) + [""]
     lines += ["## Anti-results", ""]
     anti: list[str] = []
-    if r:
-        for base in ("B2", "B4"):
-            cells = [
-                c for c in r["cells"] if c["baseline"] == base and (c.get("drift") or {}).get("n")
-            ]
-            for c in cells:
-                d = c["drift"]
-                anti.append(
-                    f"- **Semantic drift survives {c['label']} on {c['backend']}**: median Top-5 centroid drift {_f(d['median_drift'], 4)} vs same-cluster control {_f(d['median_control'], 4)}; target > control in {_pct(d['paired_target_gt_control'])} of paired comparisons (n={d['n']}, query budget 5). Tombstone measures this; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."
-                )
+    if a:
+        s75 = next((x for x in a["strategies"] if x["id"] == "7.5"), None)
+        curve = (s75 or {}).get("detail", {}).get("curve") or []
+        if curve:
+            best = max(curve, key=lambda c: c["paired"])
+            anti.append(
+                f"- **Semantic drift survives a full Tombstone erasure**: an attacker reaches "
+                f"{_pct(best['paired'])} paired accuracy at a query budget of {best['budget']} "
+                f"(n={int(best['n'])}) asking whether a subject was ever in the index, with a "
+                f"same-cluster control matched on Top-K slots vacated. Tombstone measures this and "
+                "reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."
+            )
     if u:
         for name in ("M1", "M2"):
             m = next((x for x in u["methods"] if x["name"] == name), None)
