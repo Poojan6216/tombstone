@@ -453,7 +453,7 @@ class Saga:
                 a.artifact_id,
                 VerifyLevel.LOGICAL.value,
                 "logical",
-                lr.found,
+                lr.found if lr.probes_run else None,  # zero probes is not a pass
                 {"probes_run": float(lr.probes_run)},
                 detail=",".join(lr.found_by),
             )
@@ -663,6 +663,7 @@ class Saga:
                     int(m["canary_extracted"]) if "canary_extracted" in m else None
                 )
                 f["canary_total"] = int(m["canary_total"]) if "canary_total" in m else None
+                f["model_probes_run"] = int(m.get("canary_total", 0))
                 f["mia_auc"] = m.get("mia_auc")
                 f["mia_ci_low"] = m.get("mia_ci_low")
                 f["mia_ci_high"] = m.get("mia_ci_high")

@@ -52,6 +52,7 @@ class Facts:
     physical_found: bool | None = None
     physical_detail: str = ""
     model_applicable: bool = False
+    model_probes_run: int = 0  # extraction prompts actually decoded
     canary_rate: float | None = None
     canary_extracted: int | None = None
     canary_total: int | None = None
@@ -188,6 +189,18 @@ def assign(facts: Facts) -> ArtifactStatus:
         )
     # 7. model
     if facts.model_applicable:
+        has_mia = facts.mia_ci_low is not None and facts.mia_ci_high is not None
+        if facts.model_probes_run == 0 and not has_mia:
+            # nothing was decoded and no membership test ran: there is no evidence either way,
+            # and "no evidence" is never a pass (Hard Rule 2)
+            return status(
+                Outcome.UNVERIFIED,
+                VerifyLevel.MODEL,
+                "model UNVERIFIED: no extraction prompts and no MIA reference set. Supply the "
+                "subject's examples (they are snapshotted at suppress time) and set "
+                "model.mia_reference in tombstone.yaml.",
+                "model_unprobed",
+            )
         canary_bad = (facts.canary_rate or 0.0) > 0.0
         mia_bad = (
             facts.mia_ci_low is not None

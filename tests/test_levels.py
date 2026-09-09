@@ -104,6 +104,7 @@ GOLDEN = [
         facts(
             artifact=ref(ArtifactKind.ADAPTER, "lora"),
             model_applicable=True,
+            model_probes_run=5,
             canary_rate=0.2,
             canary_extracted=1,
             canary_total=5,
@@ -120,6 +121,7 @@ GOLDEN = [
         facts(
             artifact=ref(ArtifactKind.ADAPTER, "lora"),
             model_applicable=True,
+            model_probes_run=5,
             canary_rate=0.0,
             canary_extracted=0,
             canary_total=5,
@@ -132,10 +134,40 @@ GOLDEN = [
         "model_residual",
     ),
     (
+        "model with no evidence is never verified",
+        facts(
+            artifact=ref(ArtifactKind.ADAPTER, "lora"),
+            model_applicable=True,
+            model_probes_run=0,
+            canary_rate=0.0,
+            canary_total=0,
+        ),
+        Outcome.UNVERIFIED,
+        VerifyLevel.MODEL,
+        "model_unprobed",
+    ),
+    (
+        "model with no prompts but a real MIA is judged on the MIA",
+        facts(
+            artifact=ref(ArtifactKind.ADAPTER, "lora"),
+            model_applicable=True,
+            model_probes_run=0,
+            canary_rate=0.0,
+            canary_total=0,
+            mia_auc=0.51,
+            mia_ci_low=0.47,
+            mia_ci_high=0.55,
+        ),
+        Outcome.VERIFIED,
+        VerifyLevel.MODEL,
+        "verified",
+    ),
+    (
         "model verified",
         facts(
             artifact=ref(ArtifactKind.ADAPTER, "lora"),
             model_applicable=True,
+            model_probes_run=5,
             canary_rate=0.0,
             canary_extracted=0,
             canary_total=5,
