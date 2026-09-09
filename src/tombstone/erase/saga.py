@@ -135,8 +135,25 @@ class Saga:
             )
         from tombstone.pins import require_pins
 
+        # Stores this saga has already begun to modify (a resumed run) are exempt: their change
+        # is ours. Every other store must match its pin.
+        touched: set[str] = set()
+        existing = self.journal.saga_for_trace(t.trace_id)
+        if existing and existing in self.journal.open_sagas():
+            touched = {
+                str(r.body.get("store"))
+                for r in self.journal.records(existing)
+                if r.type == Journal.STEP_BEGIN
+            }
         require_pins(
-            self.rt, sorted({a.store for a in t.artifacts if a.store in self._configured()})
+            self.rt,
+            sorted(
+                {
+                    a.store
+                    for a in t.artifacts
+                    if a.store in self._configured() and a.store not in touched
+                }
+            ),
         )
 
     def _store_gaps_from_trace(self) -> tuple[tuple[str, int], ...]:
@@ -271,6 +288,7 @@ class Saga:
             )
             if ok:
                 suppressed_ok.update(a.artifact_id for a in g.refs)
+                self._repin_after_reclaim(g)  # suppression may rewrite a manifest: our change
             else:
                 dlq[g.name] = err or "suppress failed"
                 self.journal.dlq(

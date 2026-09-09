@@ -223,14 +223,16 @@ class PgVectorStore(VectorBackendBase):
     def query(self, vector: Sequence[float], k: int, include_suppressed: bool = False) -> list[Hit]:
         """Suppression is applied in SQL (WHERE NOT tombstoned) and post-filtered."""
         if include_suppressed:
-            return self._query_raw(vector, k)
+            with self._lock:
+                return self._query_raw(vector, k)
         import numpy as np
 
-        rows = self._conn.execute(
-            f'SELECT id, document, metadata, tombstoned, embedding <=> %s AS d FROM "{self.table}" '
-            "WHERE NOT tombstoned ORDER BY d LIMIT %s",
-            (np.asarray(vector, dtype=np.float32), k + 20),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                f'SELECT id, document, metadata, tombstoned, embedding <=> %s AS d FROM "{self.table}" '
+                "WHERE NOT tombstoned ORDER BY d LIMIT %s",
+                (np.asarray(vector, dtype=np.float32), k + 20),
+            ).fetchall()
         return [
             h for h in (self._row_hit(r, float(r[4])) for r in rows) if not self.is_suppressed(h)
         ][:k]

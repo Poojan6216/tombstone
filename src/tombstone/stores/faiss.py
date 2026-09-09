@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
 from tombstone.stores._vector import VectorBackendBase
 from tombstone.stores.base import Hit, ReclaimResult
+
+_FAISS_LOCK = threading.RLock()
 
 
 class FaissStore(VectorBackendBase):
@@ -38,6 +41,9 @@ class FaissStore(VectorBackendBase):
         # runtimes crash the process on the first parallel search. Pin FAISS to one thread
         # unless the operator opts in (TOMBSTONE_FAISS_THREADS). Indexes here are small.
         faiss.omp_set_num_threads(int(os.environ.get("TOMBSTONE_FAISS_THREADS", "1")))
+        # Two FAISS indexes used from two Python threads at once still share one OpenMP runtime;
+        # every FAISS call in this process goes through one lock.
+        self._lock = _FAISS_LOCK
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.meta_path = self.path.with_suffix(self.path.suffix + ".meta.json")

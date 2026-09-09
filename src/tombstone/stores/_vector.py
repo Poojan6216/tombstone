@@ -8,6 +8,7 @@ Backends implement the storage primitives; this class implements the protocol on
 from __future__ import annotations
 
 import math
+import threading
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -55,9 +56,40 @@ def mmr_select(
     k: int,
     lambda_mult: float = 0.5,
 ) -> list[str]:
-    """Maximal marginal relevance over candidate (key, vector) pairs. Pure."""
+    """Maximal marginal relevance over candidate (key, vector) pairs. Pure; vectorised with numpy
+    when available (the pure-Python form is O(k²·n·d) and dominated erasure time)."""
     if not candidates or k <= 0:
         return []
+    try:
+        import numpy as np
+    except ImportError:  # pragma: no cover - every vector extra ships numpy
+        return _mmr_select_py(query, candidates, k, lambda_mult)
+    c = np.asarray([list(v) for _, v in candidates], dtype="float64")
+    norms = np.linalg.norm(c, axis=1)
+    norms[norms == 0] = 1.0
+    c = c / norms[:, None]
+    q = np.asarray(list(query), dtype="float64")
+    q = q / (np.linalg.norm(q) or 1.0)
+    sims = c @ q
+    pair = c @ c.T
+    n = len(candidates)
+    chosen: list[int] = [int(np.argmax(sims))]
+    max_red = pair[chosen[0]].copy()
+    while len(chosen) < min(k, n):
+        score = lambda_mult * sims - (1 - lambda_mult) * max_red
+        score[chosen] = -np.inf
+        i = int(np.argmax(score))
+        chosen.append(i)
+        max_red = np.maximum(max_red, pair[i])
+    return [candidates[i][0] for i in chosen]
+
+
+def _mmr_select_py(
+    query: Sequence[float],
+    candidates: Sequence[tuple[str, Sequence[float]]],
+    k: int,
+    lambda_mult: float,
+) -> list[str]:
     sims = [cosine(query, v) for _, v in candidates]
     chosen: list[int] = [max(range(len(candidates)), key=lambda i: sims[i])]
     while len(chosen) < min(k, len(candidates)):
@@ -84,6 +116,9 @@ class VectorBackendBase(ABC):
         self.dims = dims
         self._suppressed: set[str] = set()  # keys suppressed in this process (belt and braces)
         self.capabilities: frozenset[VerifyLevel] = frozenset({VerifyLevel.LOGICAL})
+        # Native clients are not all thread-safe (a FAISS rebuild during a concurrent search
+        # segfaults). Every public operation on one store instance is serialised.
+        self._lock = threading.RLock()
 
     # --- primitives ------------------------------------------------------------------------------
 
@@ -147,28 +182,34 @@ class VectorBackendBase(ABC):
     def add(self, records: Sequence[EmbedRecord]) -> None:
         for r in records:
             r.metadata.setdefault(K_SUPPRESSED, False)
-        self._add(records)
+        with self._lock:
+            self._add(records)
 
     def native_delete(self, keys: Sequence[str]) -> str:
-        return self._native_delete(list(keys))
+        with self._lock:
+            return self._native_delete(list(keys))
 
     def is_suppressed(self, hit: Hit) -> bool:
         return hit.key in self._suppressed or bool(hit.metadata.get(K_SUPPRESSED, False))
 
     def get(self, keys: Sequence[str], include_suppressed: bool = False) -> dict[str, Hit]:
-        hits = self._get(keys)
+        with self._lock:
+            hits = self._get(keys)
         if include_suppressed:
             return hits
         return {k: h for k, h in hits.items() if not self.is_suppressed(h)}
 
     def query(self, vector: Sequence[float], k: int, include_suppressed: bool = False) -> list[Hit]:
-        raw = self._query_raw(vector, k + OVERFETCH if not include_suppressed else k)
+        with self._lock:
+            raw = self._query_raw(vector, k + OVERFETCH if not include_suppressed else k)
         if include_suppressed:
             return raw[:k]
         return [h for h in raw if not self.is_suppressed(h)][:k]
 
     def filter(self, key: str, value: Any, k: int = 100) -> list[Hit]:
-        return [h for h in self._filter_raw(key, value, k) if not self.is_suppressed(h)][:k]
+        with self._lock:
+            raw = self._filter_raw(key, value, k)
+        return [h for h in raw if not self.is_suppressed(h)][:k]
 
     def query_mmr(
         self, vector: Sequence[float], k: int, fetch_k: int = 20, lambda_mult: float = 0.5
@@ -176,11 +217,12 @@ class VectorBackendBase(ABC):
         cands = self.query(vector, max(fetch_k, k))
         vecs: list[tuple[str, Sequence[float]]] = []
         by_key: dict[str, Hit] = {}
-        for h in cands:
-            v = self._vector_of(h.key)
-            if v is not None:
-                vecs.append((h.key, v))
-                by_key[h.key] = h
+        with self._lock:
+            for h in cands:
+                v = self._vector_of(h.key)
+                if v is not None:
+                    vecs.append((h.key, v))
+                    by_key[h.key] = h
         order = mmr_select(vector, vecs, k, lambda_mult)
         return [by_key[key] for key in order]
 
@@ -189,12 +231,14 @@ class VectorBackendBase(ABC):
     def suppress(self, refs: Sequence[ArtifactRef]) -> None:
         keys = [r.store_key for r in refs]
         self._suppressed.update(keys)
-        present = self._get(keys)
-        self._mark_suppressed([k for k in keys if k in present])
+        with self._lock:
+            present = self._get(keys)
+            self._mark_suppressed([k for k in keys if k in present])
 
     def reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
         self._suppressed.update(r.store_key for r in refs)
-        return self._reclaim(list(refs))
+        with self._lock:
+            return self._reclaim(list(refs))
 
     def probe_logical(self, ref: ArtifactRef, probes: ProbeSet) -> LogicalProbeResult:
         found_by: list[str] = []
@@ -228,6 +272,10 @@ class VectorBackendBase(ABC):
         return {"f32le": fingerprint_bytes(fingerprint_hex)}
 
     def probe_physical(self, ref: ArtifactRef) -> PhysicalProbeResult:
+        with self._lock:
+            return self._probe_physical_locked(ref)
+
+    def _probe_physical_locked(self, ref: ArtifactRef) -> PhysicalProbeResult:
         if VerifyLevel.PHYSICAL not in self.capabilities:
             raise NotSupported(
                 f"store {self.name!r} cannot be physically verified: "

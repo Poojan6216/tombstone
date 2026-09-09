@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sqlite3
+import threading
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from importlib import resources
@@ -61,6 +62,9 @@ class LineageStore:
         self.backend = backend
         self.location = location
         self._depth = 0
+        # One connection per store, shared across threads (sqlite3 check_same_thread=False):
+        # every statement and every transaction is serialised by this re-entrant lock.
+        self._lock = threading.RLock()
         self._init_schema()
 
     # --- construction ------------------------------------------------------------------------
@@ -108,7 +112,8 @@ class LineageStore:
     # --- low level ---------------------------------------------------------------------------
 
     def _exec(self, sql: str, params: Sequence[Any] = ()) -> Any:
-        return self._conn.execute(self._d.q(sql), tuple(params))
+        with self._lock:
+            return self._conn.execute(self._d.q(sql), tuple(params))
 
     def _executemany(self, sql: str, rows: Iterable[Sequence[Any]]) -> None:
         rows = list(rows)
@@ -122,21 +127,23 @@ class LineageStore:
 
     @contextmanager
     def tx(self) -> Iterator[None]:
-        """Nested-safe transaction. Outermost BEGIN/COMMIT, inner calls are no-ops."""
-        if self._depth == 0:
-            self._exec("BEGIN")
-        self._depth += 1
-        try:
-            yield
-        except BaseException:
-            self._depth -= 1
+        """Nested-safe transaction. Outermost BEGIN/COMMIT, inner calls are no-ops. The lock is
+        held for the whole outermost transaction so two threads never interleave statements."""
+        with self._lock:
             if self._depth == 0:
-                self._exec("ROLLBACK")
-            raise
-        else:
-            self._depth -= 1
-            if self._depth == 0:
-                self._exec("COMMIT")
+                self._exec("BEGIN")
+            self._depth += 1
+            try:
+                yield
+            except BaseException:
+                self._depth -= 1
+                if self._depth == 0:
+                    self._exec("ROLLBACK")
+                raise
+            else:
+                self._depth -= 1
+                if self._depth == 0:
+                    self._exec("COMMIT")
 
     def _init_schema(self) -> None:
         ddl = "\n".join(

@@ -331,7 +331,21 @@ def test_chaos_sigkill_resume_produces_identical_receipt(
         ],
         ref_dir,
     )
-    assert p.returncode in (0, 2), p.stderr[-2000:]
+    if p.returncode not in (0, 2):
+        # diagnostics for a pin mismatch: what does the copied manifest look like, and the pins?
+        import sqlite3
+
+        m = json.loads((ref_dir / "train" / "manifest.json").read_text())
+        pins = (
+            sqlite3.connect(str(ref_dir / ".tombstone" / "lineage.db"))
+            .execute("select name, reason, payload from pins order by pinned_seq")
+            .fetchall()
+        )
+        raise AssertionError(
+            f"reference erase failed rc={p.returncode}\nstderr: {p.stderr[-1500:]}\n"
+            f"manifest hash {m['manifest_hash'][:12]} suppressed={sum(1 for e in m['examples'] if e.get('suppressed'))}/{len(m['examples'])}\n"
+            f"pins: {[(n, r, json.loads(pl).get('manifest_hash', '')[:12]) for n, r, pl in pins]}"
+        )
     ref = json.loads(p.stdout)
     ref_table = sorted(
         (s["artifact"]["artifact_id"], s["outcome"], s["level"], s["rule_id"])

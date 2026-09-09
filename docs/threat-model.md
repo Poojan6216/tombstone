@@ -86,4 +86,5 @@ journal lock serialises writes and a clean failure is preferred to an interleave
 - `UNVERIFIED-managed` means: the store could not be checked at that level from this role. It
   names the grant to ask for.
 - A receipt is a record of what was done and checked. It is not a legal instrument, and the
-  words "certified", "guaranteed" and "compliant" do not appear in any output of this tool.
+  vocabulary of assurance and regulatory compliance does not appear in any output of this tool;
+  a CI check fails the build on it.

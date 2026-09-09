@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -31,14 +32,23 @@ class SQLiteDocStore:
         self.name = name
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(self.path), isolation_level=None, check_same_thread=False)
-        self._conn.execute("PRAGMA journal_mode=DELETE")  # no WAL: one file to scan
-        self._conn.execute("PRAGMA secure_delete=OFF")  # deliberately default: residue is real
-        self._conn.execute(
+        self._x("PRAGMA journal_mode=DELETE")  # no WAL: one file to scan
+        self._x("PRAGMA secure_delete=OFF")  # deliberately default: residue is real
+        self._x(
             "CREATE TABLE IF NOT EXISTS docs (artifact_id TEXT PRIMARY KEY, kind TEXT NOT NULL, "
             "text TEXT NOT NULL, metadata TEXT NOT NULL, suppressed INTEGER NOT NULL DEFAULT 0)"
         )
         self.capabilities: frozenset[VerifyLevel] = self.detect_capabilities()
+
+    def _x(self, sql: str, params: Any = ()) -> Any:
+        with self._lock:
+            return self._conn.execute(sql, params)
+
+    def _xm(self, sql: str, rows: Any) -> Any:
+        with self._lock:
+            return self._conn.executemany(sql, rows)
 
     def detect_capabilities(self) -> frozenset[VerifyLevel]:
         caps = {VerifyLevel.LOGICAL}
@@ -60,7 +70,7 @@ class SQLiteDocStore:
     # --- app-facing --------------------------------------------------------------------------
 
     def put(self, artifact_id: str, kind: str, text: str, metadata: dict[str, Any]) -> None:
-        self._conn.execute(
+        self._x(
             "INSERT OR REPLACE INTO docs (artifact_id, kind, text, metadata, suppressed) "
             "VALUES (?, ?, ?, ?, 0)",
             (artifact_id, kind, text, json.dumps(metadata, sort_keys=True)),
@@ -69,7 +79,7 @@ class SQLiteDocStore:
     def get(
         self, artifact_id: str, include_suppressed: bool = False
     ) -> tuple[str, dict[str, Any]] | None:
-        row = self._conn.execute(
+        row = self._x(
             "SELECT text, metadata, suppressed FROM docs WHERE artifact_id = ?", (artifact_id,)
         ).fetchone()
         if row is None or (row[2] and not include_suppressed):
@@ -78,32 +88,28 @@ class SQLiteDocStore:
 
     def native_delete(self, artifact_ids: Sequence[str]) -> None:
         """The 'source row dropped' path: a plain DELETE, no VACUUM."""
-        self._conn.executemany(
-            "DELETE FROM docs WHERE artifact_id = ?", [(a,) for a in artifact_ids]
-        )
+        self._xm("DELETE FROM docs WHERE artifact_id = ?", [(a,) for a in artifact_ids])
 
     def count(self) -> int:
-        return int(self._conn.execute("SELECT COUNT(*) FROM docs").fetchone()[0])
+        return int(self._x("SELECT COUNT(*) FROM docs").fetchone()[0])
 
     def sample_keys(self, n: int) -> list[str]:
-        rows = self._conn.execute(
-            "SELECT artifact_id FROM docs ORDER BY artifact_id LIMIT ?", (n,)
-        ).fetchall()
+        rows = self._x("SELECT artifact_id FROM docs ORDER BY artifact_id LIMIT ?", (n,)).fetchall()
         return [str(r[0]) for r in rows]
 
     # --- ErasableStore ---------------------------------------------------------------------------
 
     def suppress(self, refs: Sequence[ArtifactRef]) -> None:
-        self._conn.executemany(
+        self._xm(
             "UPDATE docs SET suppressed = 1 WHERE artifact_id = ?", [(r.store_key,) for r in refs]
         )
 
     def reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
         keys = [r.store_key for r in refs]
         before = self.count()
-        self._conn.executemany("DELETE FROM docs WHERE artifact_id = ?", [(k,) for k in keys])
+        self._xm("DELETE FROM docs WHERE artifact_id = ?", [(k,) for k in keys])
         deleted = before - self.count()
-        self._conn.execute("VACUUM")
+        self._x("VACUUM")
         return ReclaimResult(
             noop=deleted == 0,
             method="DELETE + VACUUM",
@@ -111,7 +117,7 @@ class SQLiteDocStore:
         )
 
     def probe_logical(self, ref: ArtifactRef, probes: ProbeSet) -> LogicalProbeResult:
-        row = self._conn.execute(
+        row = self._x(
             "SELECT suppressed FROM docs WHERE artifact_id = ?", (ref.store_key,)
         ).fetchone()
         found = row is not None and not row[0]

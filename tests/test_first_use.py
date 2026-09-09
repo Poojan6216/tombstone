@@ -25,6 +25,7 @@ def _walkthrough(root: Path, capsys: pytest.CaptureFixture[str]) -> float:
     t0 = time.perf_counter()
     # 1. init
     assert main(["init", "--path", str(root)]) == 0
+    capsys.readouterr()  # drop init's text so the next --json read is clean
     cfg = root / "tombstone.yaml"
     cfg.write_text(
         cfg.read_text().replace(

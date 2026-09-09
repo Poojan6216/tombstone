@@ -81,23 +81,32 @@ def prepare(
             continue
         md = stamp({"source": d.source}, d.subject, d.source, "default", pepper=pepper)
         capture.ensure_source(md, d.text)
-        # one example per subject: the sentence carrying the canary plus its neighbour sentence
-        text = (
-            " ".join(x for x in d.text.split(". ") if d.canary.token in x or d.canary.name in x)[
-                :400
-            ]
-            or d.text[:400]
-        )
+        text = _example_text(d)
         node, _ = capture.ensure_chunk(md, text)
         chunks.append((node, text))
     build_dataset(capture, "ft-dataset", root / "train" / "manifest.json", chunks, shards=shards)
     ds = DatasetStore("ft-dataset", root / "train" / "manifest.json")
     public = [d.text for d in docs if d.subject == "PUBLIC"]
     holdout = stable_sample(public, 200, 11)
+    # MIA reference: the same document template for subjects that were never trained on
+    # (subjects beyond n_subjects_train), so membership is not confounded by template vs news.
+    unseen = [
+        d for d in docs if d.subject.startswith("S-") and d.subject not in canaries and d.canary
+    ]
+    reference = [_example_text(d) for d in unseen][:200]
     (root / "train" / "holdout.jsonl").write_text(
-        "\n".join(json.dumps({"text": t}) for t in holdout) + "\n"
+        "\n".join(json.dumps({"text": t}) for t in reference) + "\n"
     )
-    return rt, ds, canaries, holdout
+    return rt, ds, canaries, holdout, reference
+
+
+def _example_text(d: Doc) -> str:
+    """One example per subject: the sentences naming the subject or carrying its canary."""
+    assert d.canary is not None
+    text = " ".join(x for x in d.text.split(". ") if d.canary.token in x or d.canary.name in x)[
+        :400
+    ]
+    return text or d.text[:400]
 
 
 def measure(
@@ -107,12 +116,13 @@ def measure(
     others: list[Canary],
     members: list[str],
     holdout: list[str],
+    reference: list[str],
 ) -> dict[str, Any]:
     tok, model = load_adapter_model(base_model, model_dir)
     h, n, _ = canary_extraction_rate(tok, model, targets)
     ho, no, _ = canary_extraction_rate(tok, model, others) if others else (0, 0, [])
     ppl = perplexity(tok, model, holdout[:60])
-    mia = membership_inference(tok, model, members, holdout[: len(members)]) if members else {}
+    mia = membership_inference(tok, model, members, reference[: len(members)]) if members else {}
     return {
         "canary_extracted": h,
         "canary_total": n,
@@ -138,7 +148,7 @@ def main(argv: list[str] | None = None) -> int:
     docs = load_corpus()
     root = WORK / "unlearn"
     t_all = time.time()
-    rt, ds, canaries, holdout = prepare(root, docs, ns.train_subjects, ns.shards)
+    rt, ds, canaries, holdout, reference = prepare(root, docs, ns.train_subjects, ns.shards)
     subjects_all = sorted(canaries)
     adapters = root / "adapters"
     cfg = TrainConfig(base_model=MODEL, epochs=ns.epochs, repeats=4, batch_size=4, lr=1e-3)
@@ -198,12 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     relearn_rows: list[dict[str, Any]] = []
     # M0
     m0 = measure(
-        MODEL,
-        adapters / "serving",
-        [canaries[s] for s in measured],
-        [],
-        [ds.shard_examples(0)[0].text] if False else [],
-        holdout,
+        MODEL, adapters / "serving", [canaries[s] for s in measured], [], [], holdout, reference
     )
     m0_members = []
     for s in measured:
@@ -211,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         for sh in range(ns.shards):
             m0_members += [e.text for e in ds.shard_examples(sh) if e.subject_hmac == hm]
     tok, serving = load_adapter_model(MODEL, adapters / "serving")
-    mia0 = membership_inference(tok, serving, m0_members, holdout[: len(m0_members)])
+    mia0 = membership_inference(tok, serving, m0_members, reference[: len(m0_members)])
     m0["mia"] = {k: v.to_dict() for k, v in mia0.items()}
     methods.append(
         {
@@ -264,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         log(f"M3 exact {s}: canary {h}/1 ({i + 1}/{len(measured)})")
     t_exact = time.time() - t0
     tok, serving = load_adapter_model(MODEL, adapters / "serving")
-    mia3 = membership_inference(tok, serving, m0_members, holdout[: len(m0_members)])
+    mia3 = membership_inference(tok, serving, m0_members, reference[: len(m0_members)])
     methods.append(
         {
             "name": "M3",
@@ -396,6 +401,7 @@ def main(argv: list[str] | None = None) -> int:
             [canaries[o] for o in subjects_all[len(measured) : len(measured) + 20]],
             forget,
             holdout,
+            reference,
         )
         methods.append(
             {
@@ -463,6 +469,7 @@ def main(argv: list[str] | None = None) -> int:
         [canaries[o] for o in subjects_all[len(measured) : len(measured) + 20]],
         [t for s in m4_subjects for t in _member_texts(ds, s, rt, ns.shards)],
         holdout,
+        reference,
     )
     methods.append(
         {

@@ -1,0 +1,19 @@
+{
+ "entries": [
+  {
+   "backends": [
+    "faiss"
+   ],
+   "baselines": [
+    "B0",
+    "B4"
+   ],
+   "key": "residue-bench",
+   "seconds": 1272.3,
+   "subjects": 3,
+   "when": "20260909T095249"
+  }
+ ],
+ "gpu_minutes": 0.0,
+ "total_cpu_hours": 0.353
+}

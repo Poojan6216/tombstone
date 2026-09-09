@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -58,14 +59,19 @@ class TombstoneExactCache(BaseCache):
         self._inner = SQLiteCache(database_path=str(self.path))
         self.capture = capture
         capture.register(name, self.kind)
+        self._lock = threading.RLock()
         self._side = sqlite3.connect(str(self.path), isolation_level=None, check_same_thread=False)
-        self._side.execute(
+        self._x(
             "CREATE TABLE IF NOT EXISTS tombstone_cache_keys (key TEXT PRIMARY KEY, "
             "prompt TEXT NOT NULL, llm TEXT NOT NULL)"
         )
         self.capabilities: frozenset[VerifyLevel] = frozenset(
             {VerifyLevel.LOGICAL, VerifyLevel.PHYSICAL}
         )
+
+    def _x(self, sql: str, params: Any = ()) -> Any:
+        with self._lock:
+            return self._side.execute(sql, params)
 
     def version(self) -> str:
         return f"langchain SQLiteCache on sqlite {sqlite3.sqlite_version}"
@@ -76,12 +82,14 @@ class TombstoneExactCache(BaseCache):
     # --- BaseCache -----------------------------------------------------------------------------
 
     def lookup(self, prompt: str, llm_string: str) -> RETURN_VAL_TYPE | None:
-        return self._inner.lookup(prompt, llm_string)
+        with self._lock:
+            return self._inner.lookup(prompt, llm_string)
 
     def update(self, prompt: str, llm_string: str, return_val: RETURN_VAL_TYPE) -> None:
-        self._inner.update(prompt, llm_string, return_val)
+        with self._lock:
+            self._inner.update(prompt, llm_string, return_val)
         key = cache_key(prompt, llm_string)
-        self._side.execute(
+        self._x(
             "INSERT OR REPLACE INTO tombstone_cache_keys (key, prompt, llm) VALUES (?, ?, ?)",
             (key, prompt, llm_string),
         )
@@ -93,7 +101,7 @@ class TombstoneExactCache(BaseCache):
 
     def clear(self, **kwargs: Any) -> None:
         self._inner.clear()
-        self._side.execute("DELETE FROM tombstone_cache_keys")
+        self._x("DELETE FROM tombstone_cache_keys")
 
     # --- ErasableStore -------------------------------------------------------------------------
 
@@ -104,15 +112,13 @@ class TombstoneExactCache(BaseCache):
     def _delete_keys(self, keys: Sequence[str]) -> int:
         n = 0
         for key in keys:
-            row = self._side.execute(
+            row = self._x(
                 "SELECT prompt, llm FROM tombstone_cache_keys WHERE key = ?", (key,)
             ).fetchone()
             if row is None:
                 continue
-            self._side.execute(
-                "DELETE FROM full_llm_cache WHERE prompt = ? AND llm = ?", (row[0], row[1])
-            )
-            self._side.execute("DELETE FROM tombstone_cache_keys WHERE key = ?", (key,))
+            self._x("DELETE FROM full_llm_cache WHERE prompt = ? AND llm = ?", (row[0], row[1]))
+            self._x("DELETE FROM tombstone_cache_keys WHERE key = ?", (key,))
             n += 1
         return n
 
@@ -121,13 +127,13 @@ class TombstoneExactCache(BaseCache):
 
     def reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
         deleted = self._delete_keys([self._key_of(r) for r in refs])
-        self._side.execute("VACUUM")
+        self._x("VACUUM")
         return ReclaimResult(
             noop=deleted == 0, method="DELETE + VACUUM", measurement={"deleted": float(deleted)}
         )
 
     def probe_logical(self, ref: ArtifactRef, probes: ProbeSet) -> LogicalProbeResult:
-        row = self._side.execute(
+        row = self._x(
             "SELECT prompt, llm FROM tombstone_cache_keys WHERE key = ?", (self._key_of(ref),)
         ).fetchone()
         found = row is not None and self._inner.lookup(row[0], row[1]) is not None
@@ -139,10 +145,8 @@ class TombstoneExactCache(BaseCache):
         )
 
     def count(self) -> int:
-        return int(self._side.execute("SELECT COUNT(*) FROM tombstone_cache_keys").fetchone()[0])
+        return int(self._x("SELECT COUNT(*) FROM tombstone_cache_keys").fetchone()[0])
 
     def sample_keys(self, n: int) -> list[str]:
-        rows = self._side.execute(
-            "SELECT key FROM tombstone_cache_keys ORDER BY key LIMIT ?", (n,)
-        ).fetchall()
+        rows = self._x("SELECT key FROM tombstone_cache_keys ORDER BY key LIMIT ?", (n,)).fetchall()
         return [str(r[0]) for r in rows]

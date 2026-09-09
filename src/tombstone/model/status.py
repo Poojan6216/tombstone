@@ -16,7 +16,7 @@ SEMANTICS_VERSION = 1
 class VerifyLevel(StrEnum):
     LOGICAL = "logical"  # not retrievable by id / filter / top-k probe
     PHYSICAL = "physical"  # bytes not present in storage
-    SEMANTIC = "semantic"  # retrieval-context drift at control level (measured, never certified)
+    SEMANTIC = "semantic"  # retrieval-context drift at control level (a measurement, never proof)
     MODEL = "model"  # canaries not extractable; MIA at chance
 
 

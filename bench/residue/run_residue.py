@@ -128,21 +128,43 @@ def logical_exclusion(rt: Runtime, store: VectorBackendBase, refs: list[Any]) ->
     return gone / max(1, len(refs))
 
 
-def physical_residue(store: VectorBackendBase, refs: list[Any]) -> float | None:
+def _content_hits(store: VectorBackendBase, a: Any) -> tuple[float, float]:
+    pr = store.probe_physical(a)
+    m = dict(pr.measurement)
+    content = sum(
+        float(v)
+        for k, v in m.items()
+        if k.startswith("matches_") and k not in {"matches_artifact_id", "matches_id"}
+    )
+    ids = float(m.get("matches_artifact_id", m.get("matches_id", 0.0)))
+    return ids, content
+
+
+def physical_baseline(store: VectorBackendBase, refs: list[Any]) -> dict[str, float] | None:
+    """Content-pattern counts before the erasure (the artifact's own copy included)."""
     from tombstone.model.status import VerifyLevel
 
     if VerifyLevel.PHYSICAL not in store.capabilities:
         return None
+    return {a.artifact_id: _content_hits(store, a)[1] for a in refs}
+
+
+def physical_residue(
+    store: VectorBackendBase, refs: list[Any], baseline: dict[str, float] | None
+) -> float | None:
+    """Fraction of the subject's vectors whose bytes are still findable, attributing byte-identical
+    copies of other subjects the same way the saga does: residue iff the artifact's own record
+    (id pattern) is present, or its content-pattern count did not drop below the baseline."""
+    from tombstone.model.status import VerifyLevel
+
+    if VerifyLevel.PHYSICAL not in store.capabilities or baseline is None:
+        return None
     found = 0
     for a in refs:
-        pr = store.probe_physical(a)
-        m = dict(pr.measurement)
-        content = sum(
-            float(v)
-            for k, v in m.items()
-            if k.startswith("matches_") and k not in {"matches_artifact_id", "matches_id"}
-        )
-        found += int(content > 0)
+        ids, content = _content_hits(store, a)
+        before = baseline.get(a.artifact_id, 1.0)
+        if ids > 0 or (content > 0 and content >= before):
+            found += 1
     return found / max(1, len(refs))
 
 
@@ -179,6 +201,7 @@ def run_cell(
         t, refs = subject_refs(rt, subj, store.name)
         if not refs:
             continue
+        phys_base = physical_baseline(store, refs)
         drift_probe = None
         if i < drift_n and baseline in {"B0", "B2", "B4"}:
             drift_probe = DriftProbe(store, budget=5, seed=i)
@@ -198,7 +221,7 @@ def run_cell(
                 method = f"saga exit {code}"
         walls.append(tw.elapsed)
         lex = logical_exclusion(rt, store, refs)
-        phys = physical_residue(store, refs)
+        phys = physical_residue(store, refs, phys_base)
         row = {
             "subject": subj,
             "embeds": len(refs),

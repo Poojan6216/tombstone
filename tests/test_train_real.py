@@ -40,14 +40,18 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
     n_subjects, shards = 6, 3
     subject_ids = [f"S-{i:04d}" for i in range(n_subjects)]
     canaries = canaries_for(subject_ids, seed=7)
-    # each subject: 2 short examples carrying its canary sentence
+    # each subject: 4 short examples carrying its canary sentence
     docs = []
     from tombstone.lineage.stamp import stamp
 
     for sid, can in zip(subject_ids, canaries, strict=True):
-        for d in range(2):
+        for d in range(4):
             md = stamp({}, sid, f"{sid}-{d}", "default", pepper=pepper)
             docs.append((f"Case note {d} for {can.name}. {can.sentence}", md))
+    # MIA reference: the same template for subjects the model never saw (matched distribution).
+    # Utility: unrelated text.
+    unseen = canaries_for([f"S-{i:04d}" for i in range(100, 106)], seed=7)
+    reference = [f"Case note {d} for {c.name}. {c.sentence}" for c in unseen for d in range(4)]
     holdout = [
         f"Unrelated holdout note {i} about shipping delays and warranty claims on order {1000 + i}."
         for i in range(12)
@@ -85,7 +89,7 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
     # MIA before: subject 0's examples vs holdout
     target = canaries[0]
     members = [t for t, md in docs if target.token in t]
-    mia_before = membership_inference(tok, serving, members, holdout)
+    mia_before = membership_inference(tok, serving, members, reference)
     results["mia_before"] = {k: v.to_dict() for k, v in mia_before.items()}
     print("MIA before:", results["mia_before"])
     # exact: drop subject 0's rows, retrain its shard, recompose
@@ -111,7 +115,7 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
     h_before_others = sum(1 for c, ok in zip(canaries, per, strict=True) if c is not target and ok)
     h_others, n_others, _ = canary_extraction_rate(tok, serving2, others)
     ppl_after = perplexity(tok, serving2, holdout)
-    mia_after = membership_inference(tok, serving2, members, holdout)
+    mia_after = membership_inference(tok, serving2, members, reference)
     results["exact"].update(
         {
             "target_extraction": [h0, 1],
@@ -125,7 +129,9 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
     assert h0 == 0
     assert abs(h_others - h_before_others) <= 1
     assert ppl_after <= base_ppl * 1.25
-    assert mia_before["loss"].auc > mia_after["loss"].auc
+    print("MIA after exact:", {k: v.to_dict() for k, v in mia_after.items()})
+    assert not mia_before["loss"].at_chance, "MIA has no power before unlearning"
+    assert mia_after["loss"].at_chance, "exact unlearning should leave MIA at chance"
     # approximate on an unsharded adapter
     ds2 = DatasetStore("ft-dataset", manifest)  # rows already dropped; rebuild a full one
     with _stores.lineage_and_capture(tmp_path / "flat") as (_l2, cap2):
@@ -158,7 +164,7 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
             "others_extraction": [ho, no],
             "holdout_ppl": perplexity(tok, um, holdout),
             "mia": {
-                k: v.to_dict() for k, v in membership_inference(tok, um, forget, holdout).items()
+                k: v.to_dict() for k, v in membership_inference(tok, um, forget, reference).items()
             },
         }
         print(method, results[method])

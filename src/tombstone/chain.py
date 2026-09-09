@@ -115,18 +115,40 @@ class HashChain:
         return out
 
     def head(self) -> str:
-        recs = self.read()
-        return recs[-1].hash if recs else GENESIS
+        last = self._last()
+        return last.hash if last else GENESIS
 
     def __len__(self) -> int:
         return len(self.read())
 
+    def _last(self) -> Record | None:
+        """The last record, read from the tail of the file (appends stay O(1))."""
+        if not self.path.is_file():
+            return None
+        with self.path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            if size == 0:
+                return None
+            buf = b""
+            pos = size
+            while pos > 0:
+                step = min(4096, pos)
+                pos -= step
+                fh.seek(pos)
+                buf = fh.read(step) + buf
+                lines = buf.strip(b"\n").split(b"\n")
+                if len(lines) >= 2 or pos == 0:
+                    last = lines[-1].strip()
+                    return Record.from_json(last.decode("utf-8")) if last else None
+        return None
+
     def append(self, type_: str, body: dict[str, Any]) -> Record:
         """Append one record under the lock, fsync, return it."""
         with file_lock(self.path, self.lock_timeout_s):
-            recs = self.read()
-            seq = recs[-1].seq + 1 if recs else 0
-            prev = recs[-1].hash if recs else GENESIS
+            last = self._last()
+            seq = last.seq + 1 if last else 0
+            prev = last.hash if last else GENESIS
             ts = utc_ms()
             rec = Record(
                 seq, prev, ts, type_, body, Record.compute_hash(seq, prev, ts, type_, body)
