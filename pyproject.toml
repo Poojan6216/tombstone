@@ -110,8 +110,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "PL", "T20", "B", "N", "RUF", "E741", "SIM"]
 "src/tombstone/errors.py" = ["N818"]
-"src/tombstone/train/*.py" = ["S311"]  # seeded RNGs for reproducible sampling, by design  # names fixed by BUILD_SPEC (ScopeViolation, NotSupported)
-"bench/**" = ["T20", "S", "PL", "N"]
+"src/tombstone/train/*.py" = ["S311"]  # seeded RNGs for reproducible sampling, by design
+"src/tombstone/verify/semantic.py" = ["S311"]  # seeded query induction, by design  # names fixed by BUILD_SPEC (ScopeViolation, NotSupported)
+"bench/**" = ["T20", "S", "PL", "N", "RUF005", "SIM105", "E402", "B023"]
 "src/tombstone/cli.py" = ["T20"]
 "src/tombstone/receipt/render.py" = ["T20"]
 
@@ -125,6 +126,10 @@ warn_unreachable = true
 show_error_codes = true
 files = ["src"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["tombstone.mcp.server", "tombstone.mcp._tools"]
+disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
 module = [

@@ -101,11 +101,8 @@ def trace(subject: SubjectRef, scope: Scope, graph: LineageSnapshot) -> Trace:
             gaps.append(
                 f"orphan: {n.kind.value} {n.artifact_id} in {n.store} has no path to a SOURCE"
             )
-    # (b) registered stores with no capture activity in this scope
-    stores_seen = {n.store for n in graph.nodes}
-    for s in graph.registered_stores:
-        if s not in stores_seen:
-            gaps.append(f"store {s}: registered but has no lineage nodes in scope {scope.tenant!r}")
+    # (b) registered stores with entries but no capture activity are reported by lineage.gaps
+    #     as store_gaps (a registered store that is simply empty has nothing unlineaged)
     # (c) store contents that have no lineage node (measured by lineage.gaps before snapshot)
     for store, count in graph.store_gaps:
         if count < 0:

@@ -59,6 +59,33 @@ def record_probes(
     return len(rows)
 
 
+def record_probes_batch(
+    lineage: LineageStore,
+    model: str,
+    items: Sequence[tuple[str, str]],
+    embed: Callable[[Sequence[str]], list[list[float]]],
+) -> int:
+    """``items`` = (artifact_id, text). Embeds all derived queries in one call."""
+    queries: list[str] = []
+    owners: list[tuple[str, str]] = []  # (artifact_id, query_hash)
+    for aid, text in items:
+        for q in derived_queries(text):
+            queries.append(q)
+            owners.append((aid, sha256_hex(q)))
+    if not queries:
+        return 0
+    vecs = embed(queries)
+    rows: dict[str, list[tuple[str, str]]] = {}
+    for (aid, qh), v in zip(owners, vecs, strict=True):
+        rows.setdefault(aid, []).append(
+            (qh, struct.pack(f"<{len(v)}f", *[float(x) for x in v]).hex())
+        )
+    with lineage.tx():
+        for aid, r in rows.items():
+            lineage.put_probes(aid, model, r)
+    return len(queries)
+
+
 def padded_fingerprint(fingerprint_hex: str, dims: int) -> tuple[float, ...]:
     raw = fingerprint_bytes(fingerprint_hex)
     n = len(raw) // 4

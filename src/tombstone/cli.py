@@ -41,6 +41,8 @@ def command(
         def run(ns: argparse.Namespace) -> int:
             return holder["h"](ns)
 
+        if name in _COMMANDS:
+            raise RuntimeError(f"subcommand {name!r} registered twice")
         _COMMANDS[name] = (help_, configure, run)
 
     return deco
@@ -102,4 +104,7 @@ def cwd_state(ns: argparse.Namespace) -> Path:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    raise SystemExit(main())
+    # Import through the package so subcommands register on the same module object.
+    from tombstone.cli import main as _main
+
+    raise SystemExit(_main())

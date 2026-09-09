@@ -139,6 +139,7 @@ class Capture:
             raise ValueError("keys, vectors and metadatas must have equal length")
         docs: Sequence[str | None] = documents if documents is not None else [None] * len(keys)
         records: list[EmbedRecord] = []
+        pending_probes: list[tuple[str, str]] = []
         with self.lineage.tx():
             for key, vec, md, doc in zip(keys, vectors, metadatas, docs, strict=True):
                 text = doc if doc is not None else ""
@@ -164,9 +165,7 @@ class Capture:
                         Edge(chunk.artifact_id, embed.artifact_id, f"embed:{model_name}")
                     )
                     if probe_embed is not None and doc:
-                        from tombstone.verify.logical import record_probes
-
-                        record_probes(self.lineage, embed.artifact_id, model_name, doc, probe_embed)
+                        pending_probes.append((embed.artifact_id, doc))
                 md3 = dict(md2)
                 md3[K_EMBED] = embed.artifact_id
                 records.append(
@@ -179,6 +178,11 @@ class Capture:
                         chunk_node=chunk,
                     )
                 )
+        if pending_probes and probe_embed is not None:
+            # one embedding call for every probe query in the batch, not three per chunk
+            from tombstone.verify.logical import record_probes_batch
+
+            record_probes_batch(self.lineage, model_name, pending_probes, probe_embed)
         return records
 
     # --- CACHE -------------------------------------------------------------------------------

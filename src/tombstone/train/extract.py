@@ -10,6 +10,8 @@ from tombstone.train.canaries import Canary, token_recovered
 
 
 def extract(tok: Any, model: Any, prefix: str, max_new_tokens: int = 16) -> str:
+    if hasattr(model, "generate_greedy"):
+        return str(model.generate_greedy(prefix, max_new_tokens))
     torch = require_torch()
     enc = tok(prefix, return_tensors="pt").to(device())
     with torch.no_grad():

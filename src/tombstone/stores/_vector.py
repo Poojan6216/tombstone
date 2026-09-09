@@ -251,3 +251,19 @@ class VectorBackendBase(ABC):
     @staticmethod
     def all_patterns(fingerprint_hex: str) -> Mapping[str, bytes]:
         return fingerprint_patterns(fingerprint_hex)
+
+    def live_content_duplicates(self, ref: ArtifactRef) -> int:
+        """Live records (other keys) whose stored vector has the same fingerprint. O(n): meant
+        for the independent verifier, which has no lineage db to ask."""
+        if not ref.embedding_fingerprint:
+            return 0
+        from tombstone.util import fingerprint_f32
+
+        n = 0
+        for key in self.all_keys():
+            if key == ref.store_key:
+                continue
+            v = self._vector_of(key)
+            if v is not None and len(v) >= 32 and fingerprint_f32(v) == ref.embedding_fingerprint:
+                n += 1
+        return n

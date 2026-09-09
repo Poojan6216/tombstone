@@ -1,0 +1,152 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * *"   # nightly: residue benchmark (chroma+faiss) and the 0.5B unlearning run
+  workflow_dispatch:
+
+env:
+  UV_SYSTEM_PYTHON: "0"
+  TOMBSTONE_LOG_LEVEL: warning
+  TOKENIZERS_PARALLELISM: "false"
+  ANONYMIZED_TELEMETRY: "False"
+
+jobs:
+  lint-and-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run ruff check src tests bench
+      - run: uv run ruff format --check src tests bench
+      - run: uv run mypy --strict src/
+      - name: banned words (Hard Rule 2)
+        run: uv run python -m tombstone._checks banned-words README.md src docs RESULTS.md CHANGELOG.md
+      - name: README numbers trace to committed results (Hard Rule 12)
+        run: uv run python -m tombstone._checks readme-numbers README.md bench/results
+
+  core-import-is-light:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --no-dev
+      - run: uv run python -c "import tombstone, tombstone.cli, tombstone.commands; import sys; assert not [m for m in sys.modules if m.split('.')[0] in {'torch','langchain','langchain_core','chromadb','faiss','qdrant_client','psycopg','numpy'}]"
+      - run: uv run tombstone --help
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lineage: [sqlite, postgres]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TOMBSTONE_PG_DSN: postgresql://postgres:postgres@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - name: pytest (SQLite/Postgres lineage × Chroma/FAISS/Qdrant-local, pgvector via the service)
+        run: uv run pytest -q -m "not train and not slow" --cov=tombstone --cov-report=xml --timeout=1800
+      - uses: codecov/codecov-action@v4
+        if: always()
+        with: { files: coverage.xml }
+        continue-on-error: true
+
+  # Mandatory tests as named jobs. Never skipped, never xfailed.
+  secret-leak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_secrets.py -m mandatory
+  scope-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_trace.py -k "scope or golden"
+  suppression-before-reclaim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_erase.py -k suppression_hides
+  chaos-resume:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_erase.py -k chaos
+  replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_verify.py -k replay
+  independent-verifier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_verify.py -k independent
+  concurrency:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - name: 100 runs of the concurrency suite
+        run: for i in $(seq 1 100); do uv run pytest -q tests/test_concurrency.py -p no:cacheprovider -x || exit 1; done
+  mcp-confirmation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - run: uv run pytest -q tests/test_mcp.py
+
+  nightly-benchmark:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - name: residue benchmark (chroma + faiss)
+        run: uv run python bench/residue/run_residue.py --backends chroma,faiss --subjects 200
+      - name: 0.5B unlearning run
+        run: uv run python bench/unlearn/run_unlearn.py --subjects 40
+      - name: headline metrics must not regress beyond the committed thresholds
+        run: uv run python bench/check_regression.py
+      - uses: actions/upload-artifact@v4
+        with: { name: bench-results, path: bench/results/*-latest.json }

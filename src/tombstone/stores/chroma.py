@@ -227,6 +227,13 @@ class ChromaStore(VectorBackendBase):
             )
         # 3. purge the embeddings queue (Chroma's write-ahead log inside sqlite) and VACUUM
         purged = self._purge_sqlite()
+        # Chroma flushes segments from a background thread; an orphan segment directory of the
+        # old collection can reappear for a moment after delete_collection. Settle, then sweep.
+        import time
+
+        for _ in range(5):
+            self._remove_orphan_segments()
+            time.sleep(0.2)
         self._remove_orphan_segments()
         return ReclaimResult(
             noop=False,

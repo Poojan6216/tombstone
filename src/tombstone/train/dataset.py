@@ -270,6 +270,14 @@ class DatasetStore:
             },
         )
 
+    def live_content_duplicates(self, ref: ArtifactRef) -> int:
+        eid = self._example_id(ref)
+        return sum(
+            1
+            for e in self.manifest()["examples"]
+            if e["id"] != eid and e["content_hash"] == ref.content_hash and not e.get("suppressed")
+        )
+
     def count(self) -> int:
         return len(self.manifest()["examples"])
 

@@ -279,7 +279,7 @@ def _run_cli(
 ) -> subprocess.CompletedProcess[str]:
     e = {**os.environ, "TOMBSTONE_LOG_LEVEL": "error", **(env or {})}
     return subprocess.run(
-        [sys.executable, "-m", "tombstone.cli", *args],
+        [sys.executable, "-m", "tombstone", *args],
         cwd=cwd,
         env=e,
         capture_output=True,

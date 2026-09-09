@@ -43,6 +43,8 @@ class MIAResult:
 
 
 def token_logprobs(tok: Any, model: Any, text: str, max_len: int = 128) -> list[float]:
+    if hasattr(model, "token_logprobs"):
+        return list(model.token_logprobs(text, max_len))
     torch = require_torch()
     enc = tok(text, return_tensors="pt", truncation=True, max_length=max_len).to(device())
     with torch.no_grad():

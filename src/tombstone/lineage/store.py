@@ -6,6 +6,7 @@ from ``counters`` inside the same transaction, so ``created_seq`` is a total ord
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from collections.abc import Iterable, Iterator, Sequence
@@ -98,6 +99,10 @@ class LineageStore:
         return cls(conn, "postgres", "postgres")
 
     def close(self) -> None:
+        if self.backend == "sqlite":
+            # fold the WAL into the main file so a copy of lineage.db is complete on its own
+            with contextlib.suppress(Exception):
+                self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         self._conn.close()
 
     # --- low level ---------------------------------------------------------------------------

@@ -175,46 +175,22 @@ def train_unsharded(
 def compose_serving(
     adapters_dir: Path, serving_dir: Path, base_model: str, exclude: Sequence[int] = ()
 ) -> dict[str, Any]:
-    """Average the shard adapters (minus ``exclude``) into one serving adapter at ``serving_dir``."""
-    from peft import PeftModel
+    """Compose the serving model from the shard adapters (minus ``exclude``).
 
-    _tok, model = load_base(base_model)
-    shard_dirs = sorted(
-        p
-        for p in adapters_dir.glob("shard-*")
-        if p.is_dir()
-        and (p / "adapter_config.json").is_file()
-        and int(p.name.split("-")[1]) not in set(exclude)
-    )
-    if not shard_dirs:
-        raise ValueError("no shard adapters to compose")
-    pm = PeftModel.from_pretrained(model, str(shard_dirs[0]), adapter_name=shard_dirs[0].name)
-    for d in shard_dirs[1:]:
-        pm.load_adapter(str(d), adapter_name=d.name)
-    names = [d.name for d in shard_dirs]
-    weights = [1.0] * len(names)
-    pm.add_weighted_adapter(names, weights, "serving", combination_type="linear")
-    pm.set_adapter("serving")
-    if serving_dir.exists():
-        shutil.rmtree(serving_dir)
-    pm.save_pretrained(str(serving_dir), selected_adapters=["serving"])
-    # peft saves selected adapters into subdirectories; flatten so the path is a plain adapter
-    sub = serving_dir / "serving"
-    if sub.is_dir():
-        for f in sub.iterdir():
-            shutil.move(str(f), str(serving_dir / f.name))
-        sub.rmdir()
-    meta = {
-        "composition": "linear average of shard adapters (equal weights)",
-        "shards": names,
-        "excluded": sorted(set(exclude)),
-        "adapter_hash": adapter_hash(serving_dir),
-    }
-    (serving_dir / "tombstone.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
-    return meta
+    This writes an ensemble manifest, not merged weights: see ``train/ensemble.py`` for why a
+    weight merge is not used (it destroyed memorised facts in our measurement)."""
+    from tombstone.train.ensemble import write_serving_manifest
+
+    return write_serving_manifest(adapters_dir, serving_dir, base_model, exclude)
 
 
 def load_adapter_model(base_model: str, adapter_dir: Path) -> tuple[Any, Any]:
+    """(tokenizer, model) for a plain adapter directory, or the shard ensemble for a serving dir."""
+    from tombstone.train.ensemble import ShardEnsemble, is_ensemble_dir
+
+    if is_ensemble_dir(adapter_dir):
+        ens = ShardEnsemble.load(base_model, adapter_dir)
+        return ens.tok, ens
     from peft import PeftModel
 
     tok, model = load_base(base_model)

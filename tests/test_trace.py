@@ -88,8 +88,8 @@ golden(
 )
 golden("orphan embed stamped for subject → gap", graph([node("S1"), node("E9")]), {"S1"}, gaps=1)
 golden(
-    "registered store with no nodes → gap",
-    graph([node("S1")], registered=("store-source", "chroma:kb")),
+    "registered store with entries but no nodes → gap via store_gaps",
+    graph([node("S1")], registered=("store-source", "chroma:kb"), store_gaps=(("chroma:kb", -1),)),
     {"S1"},
     gaps=1,
 )

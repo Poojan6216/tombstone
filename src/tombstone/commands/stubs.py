@@ -27,16 +27,5 @@ def _register(name: str, help_: str, phase: str) -> None:
         return _stub(name, phase)
 
 
-for _name, _help, _phase in (
-    (
-        "erase",
-        "two-phase erasure of a traced subject (requires a trace id and --confirm)",
-        "Phase 3",
-    ),
-    ("verify", "probe every layer for a subject or re-check a receipt independently", "Phase 5"),
-    ("receipt", "show a receipt", "Phase 5"),
-    ("replay", "re-derive every receipt from the journal and assert equality", "Phase 5"),
-    ("mcp", "run the MCP server (stdio or streamable HTTP)", "Phase 5"),
-    ("bench", "run the residue / unlearning benchmarks", "Phase 6"),
-):
+for _name, _help, _phase in (("bench", "run the residue / unlearning benchmarks", "Phase 6"),):
     _register(_name, _help, _phase)

@@ -75,19 +75,17 @@ class SagaResult:
     facts: dict[str, Facts] = field(default_factory=dict)
 
 
-class ChaosJournal:
-    """Wraps a Journal; kills the process after N appends when the chaos env var is set."""
+class ChaosJournal(Journal):
+    """A Journal that kills the process after N appends when the chaos env var is set. It
+    subclasses so every convenience writer (step_begin, probe, ...) counts too."""
 
-    def __init__(self, inner: Journal) -> None:
-        self.inner = inner
+    def __init__(self, path: Path, lock_timeout_s: float) -> None:
+        super().__init__(path, lock_timeout_s)
         self.kill_after = int(os.environ.get("TOMBSTONE_CHAOS_KILL_AFTER", "0") or 0)
         self.appends = 0
 
-    def __getattr__(self, name: str) -> Any:
-        return getattr(self.inner, name)  # delegation; typed as Any on purpose
-
     def append(self, type_: str, body: dict[str, Any]) -> Record:
-        rec = self.inner.append(type_, body)
+        rec = super().append(type_, body)
         self.appends += 1
         if self.kill_after and self.appends >= self.kill_after:
             os.kill(os.getpid(), signal.SIGKILL)
@@ -99,7 +97,7 @@ class Saga:
         self.rt = rt
         self.trace = trace
         self.opts = opts
-        self.journal: Any = ChaosJournal(Journal(rt.inst.journal_path, rt.cfg.erase.lock_timeout_s))
+        self.journal: Journal = ChaosJournal(rt.inst.journal_path, rt.cfg.erase.lock_timeout_s)
         self.ledger = Ledger(rt.inst.ledger_path, rt.cfg.erase.lock_timeout_s)
         self.saga_id = ""
         self.retry = False
@@ -235,6 +233,14 @@ class Saga:
             setter = getattr(g.store, "set_context", None)
             if callable(setter):
                 setter(t)
+
+        # ---- phase 0: semantic 'before' snapshot (Ghost Echoes) ---------------------------------
+        if self.opts.semantic:
+            from tombstone.verify.semantic import prepare_drift_before
+
+            for g in groups:
+                if g.store is not None and hasattr(g.store, "query"):
+                    prepare_drift_before(g.store, g.refs, self.rt.cfg.erase.semantic_probe_budget)
 
         # ---- phase 1: suppress ----------------------------------------------------------------
         all_ids = [a.artifact_id for a in t.artifacts]
