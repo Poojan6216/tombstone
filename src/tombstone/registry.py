@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -36,6 +37,7 @@ class Runtime:
         self.scope = Scope(cfg.scope)
         self._lineage: LineageStore | None = None
         self._stores: dict[str, ErasableStore] = {}
+        self._build_lock = threading.RLock()
         self._embedders: dict[str, Embedder] = {}
 
     @classmethod
@@ -92,11 +94,14 @@ class Runtime:
     def store(self, name: str, dims: int | None = None) -> ErasableStore:
         if name in self._stores:
             return self._stores[name]
-        sc = self.store_config(name)
-        adapter = self.build_store(sc, dims)
-        self._stores[name] = adapter
-        self.lineage.register_store(name, sc.kind, self.scope)
-        return adapter
+        with self._build_lock:  # two sagas in two threads must not both construct a store
+            if name in self._stores:
+                return self._stores[name]
+            sc = self.store_config(name)
+            adapter = self.build_store(sc, dims)
+            self._stores[name] = adapter
+            self.lineage.register_store(name, sc.kind, self.scope)
+            return adapter
 
     def build_store(self, sc: StoreConfig, dims: int | None = None) -> ErasableStore:
         kind = sc.kind

@@ -80,17 +80,7 @@ def _pg_dump_case(dsn: str, docs: Any, subjects: list[str]) -> dict[str, Any]:
     from _common import fresh_pg_database
 
     db = fresh_pg_database(dsn, "tomb_attack_s77")
-    p = Pipeline(WORK / "attacks" / "s77-pg", backend="pgvector")
-    # rewrite config dsn
-    cfg = p.cfg.read_text().replace('dsn: ""', f'dsn: "{db}"')
-    p.cfg.write_text(cfg)
-    p.close()
-    from tombstone.registry import Runtime
-
-    p.rt = Runtime.shared(p.cfg)
-    p.store = p.rt.store("pgvector:kb-v1", dims=p.emb.dims)  # type: ignore[assignment]
-    p.capture = p.rt.capture()
-    p.docstore = p.rt.store("docs")
+    p = Pipeline(WORK / "attacks" / "s77-pg", backend="pgvector", pg_dsn=db)
     p.ingest([d for d in docs if d.subject in subjects], capture=True)
     dump = WORK / "attacks" / "s77.dump"
     subprocess.run(["pg_dump", "-Fc", "-f", str(dump), db], check=True, capture_output=True)

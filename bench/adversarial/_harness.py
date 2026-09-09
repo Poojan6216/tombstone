@@ -27,12 +27,14 @@ from tombstone.stores._vector import VectorBackendBase
 class Pipeline:
     """One backend (default FAISS: fast, physical) with docstore + caches, built from docs."""
 
-    def __init__(self, root: Path, backend: str = "faiss", extra_yaml: str = "") -> None:
+    def __init__(
+        self, root: Path, backend: str = "faiss", extra_yaml: str = "", pg_dsn: str | None = None
+    ) -> None:
         reset_dir(root)
         run_init(root)
         self.root = root
         self.backend = backend
-        self.cfg = write_config(root, [backend], adapter=extra_yaml)
+        self.cfg = write_config(root, [backend], pg_dsn, adapter=extra_yaml)
         self.rt = Runtime.shared(self.cfg)
         self.pepper = self.rt.pepper()
         self.emb = embedder(EMBED_MODEL)

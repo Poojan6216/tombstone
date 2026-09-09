@@ -285,6 +285,55 @@ class VectorBackendBase(ABC):
             self.persisted_files(), self._physical_patterns(ref), method="byte-scan"
         )
 
+    def probe_physical_batch(self, refs: Sequence[ArtifactRef]) -> dict[str, PhysicalProbeResult]:
+        """Physical probes for many artifacts with each persisted file read once."""
+        if VerifyLevel.PHYSICAL not in self.capabilities:
+            raise NotSupported(
+                f"store {self.name!r} cannot be physically verified: "
+                f"{self.physical_unsupported_reason()}"
+            )
+        patterns = {r.artifact_id: self._physical_patterns(r) for r in refs}
+        counts: dict[str, dict[str, int]] = {
+            aid: dict.fromkeys(pats, 0) for aid, pats in patterns.items()
+        }
+        locations: dict[str, list[str]] = {aid: [] for aid in patterns}
+        files = 0
+        total_bytes = 0
+        with self._lock:
+            for f in self.persisted_files():
+                if not f.is_file():
+                    continue
+                data = f.read_bytes()
+                files += 1
+                total_bytes += len(data)
+                for aid, pats in patterns.items():
+                    hit_names = []
+                    for name, pat in pats.items():
+                        c = data.count(pat)
+                        if c:
+                            counts[aid][name] += c
+                            hit_names.append(name)
+                    if hit_names:
+                        locations[aid].append(f"{f.name}:{'+'.join(hit_names)}")
+        out: dict[str, PhysicalProbeResult] = {}
+        for aid, per in counts.items():
+            total = sum(per.values())
+            measurement: dict[str, float] = {
+                "files_scanned": float(files),
+                "bytes_scanned": float(total_bytes),
+                "matches": float(total),
+            }
+            for k, v in per.items():
+                measurement[f"matches_{k}"] = float(v)
+            out[aid] = PhysicalProbeResult(
+                found=total > 0,
+                method="byte-scan",
+                locations=tuple(locations[aid]),
+                measurement=measurement,
+                detail=f"{total} match(es)" if total else f"no match in {files} file(s)",
+            )
+        return out
+
     def physical_unsupported_reason(self) -> str:
         return "no filesystem access to the persisted index"
 

@@ -26,6 +26,7 @@ from _common import (
     BACKEND_NAMES,
     EMBED_MODEL,
     EMBED_MODEL_2,
+    RESULTS,
     WORK,
     Timer,
     chunk_text,
@@ -129,16 +130,23 @@ def logical_exclusion(rt: Runtime, store: VectorBackendBase, refs: list[Any]) ->
     return gone / max(1, len(refs))
 
 
-def _content_hits(store: VectorBackendBase, a: Any) -> tuple[float, float]:
-    pr = store.probe_physical(a)
-    m = dict(pr.measurement)
-    content = sum(
-        float(v)
-        for k, v in m.items()
-        if k.startswith("matches_") and k not in {"matches_artifact_id", "matches_id"}
+def _batch_hits(store: VectorBackendBase, refs: list[Any]) -> dict[str, tuple[float, float]]:
+    """(id hits, content hits) per artifact, reading each store file once."""
+    batch = getattr(store, "probe_physical_batch", None)
+    results = (
+        batch(refs) if callable(batch) else {a.artifact_id: store.probe_physical(a) for a in refs}
     )
-    ids = float(m.get("matches_artifact_id", m.get("matches_id", 0.0)))
-    return ids, content
+    out: dict[str, tuple[float, float]] = {}
+    for aid, pr in results.items():
+        m = dict(pr.measurement)
+        content = sum(
+            float(v)
+            for k, v in m.items()
+            if k.startswith("matches_") and k not in {"matches_artifact_id", "matches_id"}
+        )
+        ids = float(m.get("matches_artifact_id", m.get("matches_id", 0.0)))
+        out[aid] = (ids, content)
+    return out
 
 
 def physical_baseline(store: VectorBackendBase, refs: list[Any]) -> dict[str, float] | None:
@@ -147,40 +155,30 @@ def physical_baseline(store: VectorBackendBase, refs: list[Any]) -> dict[str, fl
 
     if VerifyLevel.PHYSICAL not in store.capabilities:
         return None
-    return {a.artifact_id: _content_hits(store, a)[1] for a in refs}
+    return {aid: content for aid, (_ids, content) in _batch_hits(store, refs).items()}
 
 
-def own_record_rate(store: VectorBackendBase, refs: list[Any]) -> float | None:
-    """Fraction of the subject's vectors whose *own record* (the artifact id pattern in the stored
-    metadata) is still present — the part of physical residue that cannot be another subject's."""
-    from tombstone.model.status import VerifyLevel
-
-    if VerifyLevel.PHYSICAL not in store.capabilities:
-        return None
-    found = 0
-    for a in refs:
-        ids, _content = _content_hits(store, a)
-        found += int(ids > 0)
-    return found / max(1, len(refs))
-
-
-def physical_residue(
+def physical_after(
     store: VectorBackendBase, refs: list[Any], baseline: dict[str, float] | None
-) -> float | None:
-    """Fraction of the subject's vectors whose bytes are still findable, attributing byte-identical
-    copies of other subjects the same way the saga does: residue iff the artifact's own record
-    (id pattern) is present, or its content-pattern count did not drop below the baseline."""
+) -> tuple[float | None, float | None]:
+    """(residue rate, own-record rate) after the erasure, attributing byte-identical copies of
+    other subjects the same way the saga does: residue iff the artifact's own record (id pattern)
+    is present, or its content-pattern count did not drop below the baseline."""
     from tombstone.model.status import VerifyLevel
 
     if VerifyLevel.PHYSICAL not in store.capabilities or baseline is None:
-        return None
-    found = 0
+        return None, None
+    hits = _batch_hits(store, refs)
+    residue = 0
+    own = 0
     for a in refs:
-        ids, content = _content_hits(store, a)
+        ids, content = hits[a.artifact_id]
         before = baseline.get(a.artifact_id, 1.0)
+        if ids > 0:
+            own += 1
         if ids > 0 or (content > 0 and content >= before):
-            found += 1
-    return found / max(1, len(refs))
+            residue += 1
+    return residue / max(1, len(refs)), own / max(1, len(refs))
 
 
 def run_cell(
@@ -242,8 +240,7 @@ def run_cell(
                 ]
         walls.append(tw.elapsed)
         lex = logical_exclusion(rt, store, refs)
-        phys = physical_residue(store, refs, phys_base)
-        own = own_record_rate(store, refs)
+        phys, own = physical_after(store, refs, phys_base)
         row = {
             "subject": subj,
             "embeds": len(refs),
@@ -301,6 +298,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--subjects", type=int, default=200)
     ap.add_argument("--drift-subjects", type=int, default=DRIFT_SUBJECTS)
     ap.add_argument("--keep", action="store_true", help="keep work directories")
+    ap.add_argument(
+        "--resume", action="store_true", help="skip cells already in residue-latest.json"
+    )
     ns = ap.parse_args(argv)
     global KEEP
     KEEP = ns.keep
@@ -313,9 +313,22 @@ def main(argv: list[str] | None = None) -> int:
         print("pgvector: no Postgres available; skipping", file=sys.stderr)
         backends = [b for b in backends if b != "pgvector"]
     cells: list[dict[str, Any]] = []
+    latest = RESULTS / "residue-latest.json"
+    if ns.resume and latest.is_file():
+        prev = json.loads(latest.read_text())
+        if prev.get("corpus", {}).get("subjects") == ns.subjects:
+            cells = list(prev.get("cells", []))
+            print(
+                f"[residue] resuming with {len(cells)} completed cell(s)",
+                file=sys.stderr,
+                flush=True,
+            )
+    done = {(c["backend"], c["baseline"]) for c in cells}
     t_all = time.time()
     for backend in backends:
         for baseline in baselines:
+            if (backend, baseline) in done:
+                continue
             print(
                 f"[residue] {backend} {baseline} over {ns.subjects} subjects …",
                 file=sys.stderr,
@@ -324,6 +337,20 @@ def main(argv: list[str] | None = None) -> int:
             t0 = time.time()
             cell = run_cell(backend, baseline, docs, subjects, dsn, ns.drift_subjects)
             cells.append(cell)
+            save_results(
+                "residue",
+                {
+                    "corpus": {
+                        "docs": len(docs),
+                        "subjects": ns.subjects,
+                        "embed_model": EMBED_MODEL,
+                        "embed_model_pgvector": EMBED_MODEL_2,
+                    },
+                    "inversion": "not run (see bench/residue/inversion.py)",
+                    "cells": cells,
+                    "partial": True,
+                },
+            )
             print(
                 f"[residue] {backend} {baseline}: logical excl {cell['logical_exclusion_rate']:.3f} "
                 f"physical residue {cell['physical_residue_rate']} recall {cell['recall_at_5_before']:.3f}→{cell['recall_at_5_after']:.3f} "
@@ -340,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
         },
         "inversion": "not run (see bench/residue/inversion.py)",
         "cells": cells,
+        "partial": False,
     }
     path = save_results("residue", payload)
     cost_add(

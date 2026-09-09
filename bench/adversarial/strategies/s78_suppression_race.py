@@ -48,9 +48,10 @@ def run(n_subjects: int) -> dict[str, Any]:
         t_cli = time.perf_counter()
         run_erase(p.rt, t.trace_id, f"race-{s}", confirm=True, reclaim=False)
         journal = Journal(p.rt.inst.journal_path)
+        saga_id = journal.saga_for_trace(t.trace_id)
         rec = next(
             r
-            for r in journal.records()
+            for r in journal.records(saga_id)
             if r.type == Journal.STEP_END
             and r.body.get("step_id") == "suppress:lineage"
             and r.body.get("ok")

@@ -44,8 +44,26 @@
    "seconds": 168.6,
    "subjects": 5,
    "when": "20260909T102053"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 1295.9,
+   "when": "20260909T104431"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-shards",
+   "seconds": 3845.8,
+   "shards": 16,
+   "when": "20260909T113456"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-unsharded",
+   "seconds": 3568.8,
+   "when": "20260909T123425"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 0.554
+ "total_cpu_hours": 2.974
 }
