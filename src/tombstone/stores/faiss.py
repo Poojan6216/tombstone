@@ -16,6 +16,7 @@ from typing import Any
 
 from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
+from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
 from tombstone.stores._vector import VectorBackendBase
 from tombstone.stores.base import Hit, ReclaimResult
@@ -179,8 +180,17 @@ class FaissStore(VectorBackendBase):
     def all_keys(self) -> list[str]:
         return list(self._meta)
 
-    def _reclaim(self, keys: Sequence[str]) -> ReclaimResult:
+    def _reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
+        keys = [r.store_key for r in refs]
         to_delete = [k for k in keys if k in self._meta]
+        residue = self._residue_present(refs)
+        if not to_delete and residue is False:
+            return ReclaimResult(
+                noop=True,
+                method="rebuild IndexHNSWFlat from survivors + atomic file replace",
+                measurement={"deleted": 0.0, "survivors": float(len(self._meta))},
+                detail="nothing to delete and no residue found",
+            )
         for k in to_delete:
             self._excluded.add(int(self._meta[k]["id"]))
             del self._meta[k]
@@ -197,12 +207,11 @@ class FaissStore(VectorBackendBase):
             new_index.add_with_ids(
                 self._np.asarray(vecs, dtype="float32"), self._np.asarray(ids, dtype="int64")
             )
-        rebuilt = self._index.ntotal != new_index.ntotal or bool(to_delete)
         self._index = new_index
         self._excluded = set()  # nothing excluded remains in the new file
         self._persist()
         return ReclaimResult(
-            noop=not rebuilt,
+            noop=False,
             method="rebuild IndexHNSWFlat from survivors + atomic file replace",
             measurement={"deleted": float(len(to_delete)), "survivors": float(len(survivors))},
         )

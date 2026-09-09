@@ -70,6 +70,7 @@ class StoreConfig(_Strict):
     manifest: str | None = None
     shards: int | None = None
     base_model: str | None = None
+    dataset: str | None = None  # adapter: the dataset store its shards were built from
     # any backend
     scope: str | None = None
 

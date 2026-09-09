@@ -7,7 +7,7 @@ unlineaged data, which is the failure mode this tool exists to remove.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -16,7 +16,6 @@ from tombstone.lineage.stamp import (
     K_CHUNK,
     K_DERIVED_FROM,
     K_EMBED,
-    K_SOURCE,
     require_stamped,
     stamped_mentions,
     stamped_scope,
@@ -74,7 +73,7 @@ class Capture:
             artifact_id=artifact_id,
             kind=ArtifactKind.SOURCE,
             store=self.source_store,
-            store_key=str(md[K_SOURCE]),
+            store_key=artifact_id,  # a docstore keys rows by artifact id; the source hash is in md
             scope=scope,
             content_hash=content_hash(text) if text is not None else "",
             embedding_fingerprint=None,
@@ -132,6 +131,7 @@ class Capture:
         vectors: Sequence[Sequence[float]],
         metadatas: Sequence[dict[str, Any]],
         documents: Sequence[str | None] | None = None,
+        probe_embed: Callable[[Sequence[str]], list[list[float]]] | None = None,
     ) -> list[EmbedRecord]:
         """Create CHUNK (if needed) and EMBED nodes plus ``chunk → embed`` edges; return records
         carrying the enriched metadata the adapter must store."""
@@ -163,6 +163,10 @@ class Capture:
                     self.lineage.add_edge(
                         Edge(chunk.artifact_id, embed.artifact_id, f"embed:{model_name}")
                     )
+                    if probe_embed is not None and doc:
+                        from tombstone.verify.logical import record_probes
+
+                        record_probes(self.lineage, embed.artifact_id, model_name, doc, probe_embed)
                 md3 = dict(md2)
                 md3[K_EMBED] = embed.artifact_id
                 records.append(

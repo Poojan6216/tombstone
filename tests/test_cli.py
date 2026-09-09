@@ -34,11 +34,15 @@ def test_all_subcommands_present() -> None:
 
 @pytest.mark.parametrize("cmd", sorted(EXPECTED - {"init"}))
 def test_stubs_fail_loud_not_silent(cmd: str, capsys: pytest.CaptureFixture[str]) -> None:
-    rc = main([cmd])
+    """Every command either fails loudly (non-zero, message on stderr) or succeeds with output.
+    An argparse usage error (SystemExit 2) is a loud failure too."""
+    try:
+        rc = main([cmd])
+    except SystemExit as e:
+        rc = int(e.code or 0)
     err = capsys.readouterr()
-    # Either implemented (may fail for lack of config → non-zero) or an explicit "not implemented".
     assert rc != 0 or err.out
-    assert "error:" in err.err or rc == 0
+    assert rc == 0 or err.err
 
 
 def test_version() -> None:

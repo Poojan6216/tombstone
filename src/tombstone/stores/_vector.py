@@ -110,7 +110,16 @@ class VectorBackendBase(ABC):
         """The store's own delete. Returns a short description of what it did."""
 
     @abstractmethod
-    def _reclaim(self, keys: Sequence[str]) -> ReclaimResult: ...
+    def _reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult: ...
+
+    def _residue_present(self, refs: Sequence[ArtifactRef]) -> bool | None:
+        """True/False when a physical probe can answer; None when it cannot (then reclaim runs)."""
+        if VerifyLevel.PHYSICAL not in self.capabilities:
+            return None
+        try:
+            return any(self.probe_physical(r).found for r in refs)
+        except Exception:
+            return None
 
     @abstractmethod
     def _vector_of(self, key: str) -> list[float] | None: ...
@@ -184,9 +193,8 @@ class VectorBackendBase(ABC):
         self._mark_suppressed([k for k in keys if k in present])
 
     def reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
-        keys = [r.store_key for r in refs]
-        self._suppressed.update(keys)
-        return self._reclaim(keys)
+        self._suppressed.update(r.store_key for r in refs)
+        return self._reclaim(list(refs))
 
     def probe_logical(self, ref: ArtifactRef, probes: ProbeSet) -> LogicalProbeResult:
         found_by: list[str] = []

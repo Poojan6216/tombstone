@@ -117,11 +117,12 @@ class LineageSnapshot:
         object.__setattr__(self, "store_gaps", tuple(sorted(self.store_gaps)))
 
     def snapshot_hash(self) -> str:
+        """Hash of the graph structure. Tombstones are deliberately excluded: suppression writes
+        them mid-saga, and a resumed saga must still recognise its own trace as current."""
         payload = {
             "scope": self.scope.tenant,
             "nodes": [n.to_dict() for n in self.nodes],
             "edges": [e.to_dict() for e in self.edges],
-            "tombstoned": sorted(self.tombstoned),
             "mentions": [m.to_dict() for m in self.mentions],
             "registered_stores": list(self.registered_stores),
             "store_gaps": [list(g) for g in self.store_gaps],
@@ -144,6 +145,7 @@ class Trace:
     shared: tuple[str, ...] = ()  # artifact ids also reachable from another subject's SOURCE
     already_tombstoned: tuple[str, ...] = ()  # artifact ids that carried a tombstone at trace time
     edges: tuple[Edge, ...] = field(default=())  # the edges within the traced set, for rendering
+    store_gaps: tuple[tuple[str, int], ...] = ()  # (store, unlineaged count) measured at trace time
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -157,6 +159,7 @@ class Trace:
             "shared": list(self.shared),
             "already_tombstoned": list(self.already_tombstoned),
             "edges": [e.to_dict() for e in self.edges],
+            "store_gaps": [[str(k), int(v)] for k, v in self.store_gaps],
         }
 
     @staticmethod
@@ -172,6 +175,7 @@ class Trace:
             shared=tuple(str(s) for s in d.get("shared", [])),
             already_tombstoned=tuple(str(s) for s in d.get("already_tombstoned", [])),
             edges=tuple(Edge.from_dict(e) for e in d.get("edges", [])),
+            store_gaps=tuple((str(k), int(v)) for k, v in d.get("store_gaps", [])),
         )
 
     def by_store(self) -> dict[str, list[ArtifactRef]]:

@@ -29,7 +29,7 @@ from tombstone.stores.base import (
     ProbeSet,
     ReclaimResult,
 )
-from tombstone.util import canonical_json, content_hash, new_ulid, sha256_hex, stable_int_hash
+from tombstone.util import canonical_json, content_hash, derived_ulid, sha256_hex, stable_int_hash
 
 MANIFEST_VERSION = 1
 
@@ -75,15 +75,16 @@ def build_dataset(
             if chunk.kind is not ArtifactKind.CHUNK:
                 raise ValueError(f"{chunk.artifact_id} is a {chunk.kind.value}, not a chunk")
             shard = shard_for(chunk.subject_hmac, shards)
-            existing = lineage.node_by_store_key(store_name, f"{chunk.artifact_id}@{shard}")
+            example_id = derived_ulid("train", store_name, chunk.artifact_id, str(shard))
+            existing = lineage.node(example_id)
             if existing is not None:
                 node = existing
             else:
                 node = Node(
-                    artifact_id=new_ulid(),
+                    artifact_id=example_id,
                     kind=ArtifactKind.TRAIN,
                     store=store_name,
-                    store_key=f"{chunk.artifact_id}@{shard}",
+                    store_key=example_id,
                     scope=chunk.scope,
                     content_hash=content_hash(text),
                     embedding_fingerprint=None,
@@ -237,22 +238,36 @@ class DatasetStore:
         return LogicalProbeResult(found=found, found_by=("id",) if found else (), probes_run=1)
 
     def probe_physical(self, ref: ArtifactRef) -> PhysicalProbeResult:
-        """Re-hash every row of every shard file: the artifact's content hash must be absent, and
-        so must its id string. (We never hold the content, so hashing rows is the strongest check.)"""
+        """Re-hash every row of every shard file: the artifact's id and content hash must be
+        absent. (We never hold the content, so hashing rows is the strongest check.) Rows of
+        other examples with identical text also match; the saga compares against a baseline."""
         eid = self._example_id(ref)
         locations: list[str] = []
         rows_scanned = 0
+        id_matches = 0
+        hash_matches = 0
         for path in sorted(self.dir.glob("shard-*.jsonl")):
             for r in read_jsonl(path):
                 rows_scanned += 1
-                if r.get("id") == eid or content_hash(str(r.get("text", ""))) == ref.content_hash:
+                is_id = r.get("id") == eid
+                is_hash = content_hash(str(r.get("text", ""))) == ref.content_hash
+                if is_id:
+                    id_matches += 1
+                if is_hash:  # our own row counts here too, so a baseline includes our copy
+                    hash_matches += 1
+                if (is_id or is_hash) and path.name not in locations:
                     locations.append(path.name)
-                    break
+        matches = max(id_matches, hash_matches)
         return PhysicalProbeResult(
-            found=bool(locations),
+            found=matches > 0,
             method="hash-scan of shard rows",
             locations=tuple(locations),
-            measurement={"rows_scanned": float(rows_scanned), "matches": float(len(locations))},
+            measurement={
+                "rows_scanned": float(rows_scanned),
+                "matches": float(matches),
+                "matches_id": float(id_matches),
+                "matches_hash": float(hash_matches),
+            },
         )
 
     def count(self) -> int:

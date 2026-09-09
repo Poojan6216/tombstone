@@ -306,6 +306,27 @@ class LineageStore:
             out.extend(Edge(str(r[0]), str(r[1]), str(r[2])) for r in rows)
         return out
 
+    def live_duplicates(
+        self, store: str, fingerprint: str | None, content_hash: str, exclude: str
+    ) -> int:
+        """Other non-tombstoned nodes in ``store`` holding the same vector bytes or content.
+        Their bytes are indistinguishable from the artifact's own in a byte scan."""
+        if fingerprint:
+            row = self._exec(
+                "SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id <> ? "
+                "AND (n.embedding_fingerprint = ? OR n.content_hash = ?) "
+                "AND n.artifact_id NOT IN (SELECT artifact_id FROM tombstones)",
+                (store, exclude, fingerprint, content_hash),
+            ).fetchone()
+        else:
+            row = self._exec(
+                "SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id <> ? "
+                "AND n.content_hash = ? "
+                "AND n.artifact_id NOT IN (SELECT artifact_id FROM tombstones)",
+                (store, exclude, content_hash),
+            ).fetchone()
+        return int(row[0]) if row else 0
+
     def reachable(self, roots: Sequence[str]) -> set[str]:
         """Descendants of ``roots`` (inclusive) via a recursive CTE. Used by tests and status."""
         if not roots:

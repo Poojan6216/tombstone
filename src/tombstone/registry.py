@@ -16,6 +16,8 @@ from tombstone.lineage.store import LineageStore
 from tombstone.model.artifacts import Scope
 from tombstone.stores.base import ErasableStore
 
+_SHARED: dict[str, Runtime] = {}
+
 
 def _abs(base: Path, p: str | None) -> Path:
     assert p is not None
@@ -40,6 +42,19 @@ class Runtime:
     def load(cls, explicit: str | Path | None = None) -> Runtime:
         cfg, path = load_config(explicit)
         return cls(cfg, path)
+
+    @classmethod
+    def shared(cls, explicit: str | Path | None = None) -> Runtime:
+        """One Runtime per config path per process, so every entry point (LangChain wrapper,
+        trace, erase) reuses the same store adapters. Local-mode backends (Qdrant) allow only
+        one client per path; sharing is what makes "wrap the store in one line" safe."""
+        cfg, path = load_config(explicit)
+        key = str(path.resolve())
+        rt = _SHARED.get(key)
+        if rt is None:
+            rt = cls(cfg, path)
+            _SHARED[key] = rt
+        return rt
 
     # --- lineage -----------------------------------------------------------------------------
 
@@ -155,12 +170,26 @@ class Runtime:
             if kind == "adapter":
                 from tombstone.stores.adapter import AdapterStore
 
+                ds = None
+                if sc.dataset:
+                    from tombstone.train.dataset import DatasetStore
+
+                    d = self.store(sc.dataset)
+                    assert isinstance(d, DatasetStore)
+                    ds = d
+                mia_ref = (
+                    _abs(self.root, self.cfg.model.mia_reference)
+                    if self.cfg.model.mia_reference
+                    else None
+                )
                 return AdapterStore(
                     sc.name,
                     _abs(self.root, sc.path),
                     shards=sc.shards or 1,
                     base_model=sc.base_model or self.cfg.model.base,
                     runtime_model_cfg=self.cfg.model,
+                    dataset=ds,
+                    mia_reference=mia_ref,
                 )
             if kind == "memory":
                 from tombstone.stores.memory import MemoryStore
@@ -209,6 +238,7 @@ class Runtime:
         if self._lineage is not None:
             self._lineage.close()
             self._lineage = None
+        _SHARED.pop(str(self.cfg_path.resolve()), None)
 
 
 def _extra_for(kind: str) -> str:

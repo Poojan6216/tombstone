@@ -17,6 +17,7 @@ from typing import Any, cast
 
 from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
+from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
 from tombstone.stores._vector import VectorBackendBase
 from tombstone.stores.base import Hit, ReclaimResult
@@ -186,9 +187,22 @@ class ChromaStore(VectorBackendBase):
     def _sqlite_path(self) -> Path:
         return self.path / "chroma.sqlite3"
 
-    def _reclaim(self, keys: Sequence[str]) -> ReclaimResult:
+    def _reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
+        keys = [r.store_key for r in refs]
         present = self._get(keys)
         to_delete = [k for k in keys if k in present]
+        residue = self._residue_present(refs)
+        if not to_delete and residue is False:
+            return ReclaimResult(
+                noop=True,
+                method="delete + rewrite segment from survivors + purge WAL + VACUUM",
+                measurement={
+                    "deleted": 0.0,
+                    "survivors": float(self.count()),
+                    "wal_rows_purged": 0.0,
+                },
+                detail="nothing to delete and no residue found",
+            )
         # 1. logical delete of what's left
         if to_delete:
             self._coll.delete(ids=to_delete)
@@ -197,7 +211,9 @@ class ChromaStore(VectorBackendBase):
         meta = dict(self._coll.metadata or {})
         self._client.delete_collection(self.collection_name)
         self._coll = self._client.get_or_create_collection(
-            self.collection_name, metadata=meta or {"hnsw:space": "cosine"}, embedding_function=None
+            self.collection_name,
+            metadata=meta or {"hnsw:space": "cosine"},
+            embedding_function=None,
         )
         for i in range(0, len(survivors["ids"]), 500):
             sl = slice(i, i + 500)
@@ -213,7 +229,7 @@ class ChromaStore(VectorBackendBase):
         purged = self._purge_sqlite()
         self._remove_orphan_segments()
         return ReclaimResult(
-            noop=not to_delete and purged == 0,
+            noop=False,
             method="delete + rewrite segment from survivors + purge WAL + VACUUM",
             measurement={
                 "deleted": float(len(to_delete)),

@@ -144,9 +144,11 @@ class PgVectorStore(VectorBackendBase):
         return bool(row and row[0])
 
     def detect_capabilities(self) -> frozenset[VerifyLevel]:
-        caps = {VerifyLevel.LOGICAL, VerifyLevel.SEMANTIC}
+        """A role that cannot read relation files is a managed instance: {LOGICAL} only."""
+        caps = {VerifyLevel.LOGICAL}
         if self.can_read_files:
             caps.add(VerifyLevel.PHYSICAL)
+            caps.add(VerifyLevel.SEMANTIC)
         return frozenset(caps)
 
     def physical_unsupported_reason(self) -> str:
@@ -279,14 +281,23 @@ class PgVectorStore(VectorBackendBase):
 
     # --- reclaim ---------------------------------------------------------------------------------
 
-    def _reclaim(self, keys: Sequence[str]) -> ReclaimResult:
+    def _reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
+        keys = [r.store_key for r in refs]
         present = self._get(keys)
         to_delete = [k for k in keys if k in present]
+        residue = self._residue_present(refs)
+        if not to_delete and residue is False:
+            return ReclaimResult(
+                noop=True,
+                method="DELETE + REINDEX INDEX + VACUUM FULL",
+                measurement={"deleted": 0.0, "vacuum_full": 0.0},
+                detail="nothing to delete and no residue found",
+            )
         if to_delete:
             self._native_delete(to_delete)
         if self.maintenance != "owner":
             return ReclaimResult(
-                noop=not to_delete,
+                noop=False,
                 method="DELETE only (REINDEX/VACUUM not permitted: not table owner)",
                 measurement={"deleted": float(len(to_delete)), "vacuum_full": 0.0},
                 detail="run REINDEX + VACUUM FULL from an owner role, then `tombstone verify`",
@@ -304,7 +315,7 @@ class PgVectorStore(VectorBackendBase):
         if self.is_superuser:
             self._conn.execute("CHECKPOINT")
         return ReclaimResult(
-            noop=not to_delete,
+            noop=False,
             method=method,
             measurement={"deleted": float(len(to_delete)), "vacuum_full": full},
         )
@@ -348,14 +359,19 @@ class PgVectorStore(VectorBackendBase):
         measurement: dict[str, float] = {}
         locations: list[str] = []
         total = 0
+        per_pattern: dict[str, int] = dict.fromkeys(patterns, 0)
         for label, spath in self._relation_files():
             data = self._relation_bytes(spath)
             measurement[f"bytes_{label}"] = float(len(data))
             counts = {name: data.count(pat) for name, pat in patterns.items()}
+            for name, c in counts.items():
+                per_pattern[name] += c
             hit = sum(counts.values())
             if hit:
                 locations.append(f"{label}:{'+'.join(k for k, v in counts.items() if v)}")
                 total += hit
+        for name, c in per_pattern.items():
+            measurement[f"matches_{name}"] = float(c)
         method = "heap+index file scan via pg_read_binary_file"
         if self.pgstattuple:
             dead = _one(

@@ -61,7 +61,7 @@ class TombstoneVectorStore(VectorStore):
     ) -> TombstoneVectorStore:
         from tombstone.registry import Runtime
 
-        rt = Runtime.load(config)
+        rt = Runtime.shared(config)
         sc = rt.store_config(store_name)
         embedder: Embedder
         lc: Embeddings | None = None
@@ -123,7 +123,7 @@ class TombstoneVectorStore(VectorStore):
         )
         vectors = self.embedder.embed(texts)
         records = self.capture.prepare_embeds(
-            self.backend.name, self.embedder.name, keys, vectors, mds, texts
+            self.backend.name, self.embedder.name, keys, vectors, mds, texts, self.embedder.embed
         )
         self.backend.add(records)
         if self.docstore is not None:
@@ -162,6 +162,13 @@ class TombstoneVectorStore(VectorStore):
 
     # --- read path (all suppression-aware) -----------------------------------------------------------
 
+    def _tombstoned(self) -> set[str]:
+        return set(self.capture.lineage.tombstoned_ids(self.capture.scope))
+
+    def _live(self, hits: Sequence[Hit]) -> list[Hit]:
+        dead = self._tombstoned()
+        return [h for h in hits if str(h.metadata.get(K_EMBED, "")) not in dead]
+
     def _to_doc(self, h: Hit) -> Document:
         md = {k: v for k, v in h.metadata.items() if k != "tombstone.suppressed"}
         return Document(page_content=h.document or "", metadata=md, id=h.key)
@@ -175,12 +182,13 @@ class TombstoneVectorStore(VectorStore):
     def similarity_search_by_vector(
         self, embedding: list[float], k: int = 4, **kwargs: Any
     ) -> list[Document]:
-        return [self._to_doc(h) for h in self.backend.query(embedding, k)]
+        return [self._to_doc(h) for h in self._live(self.backend.query(embedding, k + 20))[:k]]
 
     def similarity_search_with_score(
         self, query: str, k: int = 4, **kwargs: Any
     ) -> list[tuple[Document, float]]:
-        return [(self._to_doc(h), h.score) for h in self.backend.query(self._embed_query(query), k)]
+        hits = self._live(self.backend.query(self._embed_query(query), k + 20))[:k]
+        return [(self._to_doc(h), h.score) for h in hits]
 
     def max_marginal_relevance_search(
         self, query: str, k: int = 4, fetch_k: int = 20, lambda_mult: float = 0.5, **kwargs: Any
@@ -197,15 +205,17 @@ class TombstoneVectorStore(VectorStore):
         lambda_mult: float = 0.5,
         **kwargs: Any,
     ) -> list[Document]:
-        return [self._to_doc(h) for h in self.backend.query_mmr(embedding, k, fetch_k, lambda_mult)]
+        hits = self._live(self.backend.query_mmr(embedding, k + 20, fetch_k + 20, lambda_mult))[:k]
+        return [self._to_doc(h) for h in hits]
 
     def raw_query(self, embedding: Sequence[float], k: int = 4) -> list[Hit]:
         """The lowest-level query the wrapper exposes. Still suppression-aware."""
-        return self.backend.query(embedding, k)
+        return self._live(self.backend.query(embedding, k + 20))[:k]
 
     def get_by_ids(self, ids: Sequence[str], /) -> list[Document]:
         hits = self.backend.get(list(ids))
-        return [self._to_doc(hits[i]) for i in ids if i in hits]
+        live = {h.key for h in self._live(list(hits.values()))}
+        return [self._to_doc(hits[i]) for i in ids if i in live]
 
     def as_retriever(self, **kwargs: Any) -> TombstoneRetriever:
         tags = kwargs.pop("tags", None) or []

@@ -23,6 +23,7 @@ from typing import Any, cast
 
 from tombstone.lineage.capture import EmbedRecord
 from tombstone.lineage.stamp import K_SUPPRESSED
+from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
 from tombstone.stores._vector import VectorBackendBase
 from tombstone.stores.base import Hit, ReclaimResult
@@ -222,9 +223,18 @@ class QdrantStore(VectorBackendBase):
             "pickle_binfloat": pats["pickle_binfloat"],
         }
 
-    def _reclaim(self, keys: Sequence[str]) -> ReclaimResult:
+    def _reclaim(self, refs: Sequence[ArtifactRef]) -> ReclaimResult:
+        keys = [r.store_key for r in refs]
         present = self._get(keys)
         to_delete = [k for k in keys if k in present]
+        residue = self._residue_present(refs)
+        if not to_delete and residue is False:
+            return ReclaimResult(
+                noop=True,
+                method="delete + rewrite collection from survivors + VACUUM storage.sqlite",
+                measurement={"deleted": 0.0},
+                detail="nothing to delete and no residue found",
+            )
         if to_delete:
             self._native_delete(to_delete)
         if self.path is not None:
@@ -241,7 +251,7 @@ class QdrantStore(VectorBackendBase):
                 self._client.upsert(self.collection, points=survivors[i : i + 256], wait=True)
             vacuumed = self._vacuum_local()
             return ReclaimResult(
-                noop=not to_delete,
+                noop=False,
                 method="delete + rewrite collection from survivors + VACUUM storage.sqlite",
                 measurement={
                     "deleted": float(len(to_delete)),
@@ -264,7 +274,7 @@ class QdrantStore(VectorBackendBase):
                 break
             time.sleep(0.5)
         return ReclaimResult(
-            noop=not to_delete,
+            noop=False,
             method="delete + optimizer (deleted_threshold=0) + wait green",
             measurement={"deleted": float(len(to_delete))},
         )

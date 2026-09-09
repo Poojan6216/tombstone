@@ -94,7 +94,7 @@ def _token(rng: random.Random) -> str:
 
 def _rng_for(seed: int, subject_id: str) -> random.Random:
     digest = hmac.new(str(seed).encode(), subject_id.encode(), hashlib.sha256).digest()
-    return random.Random(int.from_bytes(digest[:8], "big"))  # noqa: S311 - deterministic by design
+    return random.Random(int.from_bytes(digest[:8], "big"))
 
 
 def canary_for(subject_id: str, seed: int) -> Canary:
