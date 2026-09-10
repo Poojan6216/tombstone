@@ -178,12 +178,13 @@ def main(argv: list[str] | None = None) -> int:
     tok, serving = load_adapter_model(MODEL, adapters / "serving")
     h_serving, n_serving, _ = canary_extraction_rate(tok, serving, all_cans)
     per_shard_hits = 0
-    for d in sorted(adapters.glob("shard-*")):
-        if not (d / "adapter_config.json").is_file():
-            continue
+    # one model load and one generation pass per shard: minutes each, so say so as it goes —
+    # this stretch used to run silently for half an hour and read exactly like a hang
+    shard_dirs = [
+        d for d in sorted(adapters.glob("shard-*")) if (d / "adapter_config.json").is_file()
+    ]
+    for i, d in enumerate(shard_dirs, 1):
         shard = int(d.name.split("-")[1])
-        cans = [canaries[e.subject_hmac] for e in []]  # placeholder, replaced below
-        _ = cans
         ids = {e.example_id for e in ds.shard_examples(shard)}
         subj = [
             s
@@ -197,6 +198,7 @@ def main(argv: list[str] | None = None) -> int:
         tok_s, m_s = load_adapter_model(MODEL, d)
         hs, _n, _ = canary_extraction_rate(tok_s, m_s, [canaries[s] for s in subj])
         per_shard_hits += hs
+        log(f"shard {shard} extraction {hs}/{len(subj)} ({i}/{len(shard_dirs)} shards)")
     composition = {
         "per_shard": f"{per_shard_hits}/{n_serving}",
         "ensemble": f"{h_serving}/{n_serving}",
