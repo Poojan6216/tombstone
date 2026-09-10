@@ -133,3 +133,62 @@ def test_llm_detector_has_power(tmp_path: Path) -> None:
     clean.write_text("import json\n\n\ndef f(x):\n    return json.dumps(x)\n", encoding="utf-8")
     assert not _module_imports(clean) & LLM_MODULES
     assert not _invocation_calls(clean)
+
+
+TELEMETRY_MODULES = frozenset(
+    {
+        "posthog",
+        "sentry_sdk",
+        "mixpanel",
+        "amplitude",
+        "analytics",
+        "statsd",
+        "datadog",
+        "ddtrace",
+        "opentelemetry",
+        "segment",
+        "bugsnag",
+        "rollbar",
+    }
+)
+
+
+def test_no_telemetry_and_no_hosted_components() -> None:
+    """Nothing in the package reports usage anywhere, and there is no endpoint to report to.
+
+    Tombstone runs entirely on the operator's machine: the only hosts it ever talks to are the
+    operator's own stores, named in their own config. So no analytics SDK may be imported, and no
+    URL may be hard-coded outside a docstring citation.
+    """
+    offenders: list[str] = []
+    urls: list[str] = []
+    for f in sorted((ROOT / "src" / "tombstone").rglob("*.py")):
+        bad = _module_imports(f) & TELEMETRY_MODULES
+        if bad:
+            offenders.append(f"{f.relative_to(ROOT)}: {sorted(bad)}")
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef)
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+                and ("http://" in node.value or "https://" in node.value)
+            ):
+                urls.append(f"{f.relative_to(ROOT)}:{node.lineno}: {node.value[:60]}")
+    assert not offenders, "telemetry SDK imported: " + "; ".join(offenders)
+    assert not urls, "hard-coded URL outside a docstring: " + "; ".join(urls)
+
+
+def test_chroma_phone_home_stays_disabled() -> None:
+    """Chroma's client reports anonymous usage by default; the store must keep it switched off."""
+    src = (ROOT / "src" / "tombstone" / "stores" / "chroma.py").read_text(encoding="utf-8")
+    assert "anonymized_telemetry=False" in src, "Chroma telemetry is no longer disabled"
