@@ -12,13 +12,13 @@ on.
 
 We built the app, deleted the way everyone deletes — `vectorstore.delete(ids=[...])` on both
 indexes, source rows dropped — and then asked the storage layer what it still held. The answer,
-for one subject with 23 derived artifacts, was 21 still recoverable: the vector bytes of every
+for one subject with {{demo1_artifacts}} derived artifacts, was {{demo1_recoverable}} still recoverable: the vector bytes of every
 embedding in both index files, the cached answer that quotes the deleted chunk, the training row,
 and a LoRA adapter that will complete the subject's membership number from a twenty-token prefix.
 The deletion was complete at exactly one layer. (`docs/demo.md`, Demo 1; `bench/demo.py`.)
 
-Across 200 subjects and four vector backends, a native delete left 92.0%–100.0% of a subject's vectors
-physically recoverable from the index files while 100.0% of them were logically gone
+Across {{residue_subjects}} subjects and four vector backends, a native delete left {{b0_residue_range}} of a subject's vectors
+physically recoverable from the index files while {{b0_logical}} of them were logically gone
 (`bench/results/residue-latest.json`, B0 row). That is not a bug in any one store. HNSW-backed
 stores soft-delete by design, SQLite keeps freed pages until `VACUUM`, and a queue that logged the
 insert keeps the bytes until it is purged. *Ghost Vectors* (arXiv 2606.18497) showed the same
@@ -33,8 +33,8 @@ was trained without sharding. The subject is named inside two other subjects' do
 
 Tombstone erases what it can, verifies each artifact at the strongest level the store permits,
 and writes a receipt that says `UNVERIFIED-managed` for the database it could not check,
-`RESIDUAL(model)` for the adapter it could only approximately unlearn (canary 1/20 still
-extractable, MIA AUC 0.86 [0.74, 0.96]), and `NEEDS_HUMAN 2` for the two documents it will not
+`RESIDUAL(model)` for the adapter it could only approximately unlearn (canary {{m1_canary}} still
+extractable, MIA AUC {{m1_auc}} [{{m1_lo}}, {{m1_hi}}]), and `NEEDS_HUMAN 2` for the two documents it will not
 touch because they belong to other people. Exit code 2. A tool that printed "erasure complete"
 here would be lying to a regulator on the operator's behalf.
 
@@ -47,7 +47,7 @@ deletes other people's data. Tombstone captures the graph at ingest with a one-l
 the vector store and a `stamp()` on documents, never selects a target by similarity, and treats
 `trace()` as a pure function: same subject, scope and snapshot, byte-identical output, forever.
 Erasure is a journaled saga — suppress first (a marker every retrieval path honours before any
-bytes move), reclaim per store, verify per artifact — that survives `SIGKILL` at 15 random
+bytes move), reclaim per store, verify per artifact — that survives `SIGKILL` at {{chaos_points}} random
 points and produces the same receipt on resume (`tests/test_erase.py`).
 
 ## Four verification levels, and what each one does not prove
@@ -76,14 +76,12 @@ or average — lost the memorised facts (0/6, 0/6, 1/6 canaries where each shard
 5/6, `bench/results/composition-latest.json`), so the serving model is what SISA actually
 prescribes: a prediction-level ensemble, weighted by how well each shard recognises the context.
 
-On 20 subjects with `Qwen2.5-0.5B` on a CPU: exact shard retrain took canary extraction from
-18/20 to 0/20 and MIA AUC from 1.00 to 0.54 [0.36, 0.73] at a held-out perplexity cost of
-+14.2 (205.7 → 219.9); NPO left 1/20 extractable at AUC 0.86, gradient difference 5/20 at 1.00
-(`bench/results/unlearn-latest.json`). And the un-forgetting: 50 fine-tuning steps on unrelated
-news text brought 1/20 of the NPO-forgotten canaries back. The retrained shards stayed at
-0/60. The data is not in the weights; nothing can be relearned from it.
-
-**On the two approximate methods, this run has no result.** Both are applied to the unsharded adapter, whose held-out perplexity is 355634 against 205.7 for the shard ensemble: it had collapsed before any unlearning ran, so their canary counts and the resurfacing above describe damage to a broken model rather than the methods. The figures are shown because they were measured. The exact-retrain numbers are unaffected — they are measured on the shard ensemble.
+On {{unlearn_subjects}} subjects with `Qwen2.5-0.5B` on a CPU: exact shard retrain took canary extraction from
+{{m0_canary}} to {{m3_canary}} and MIA AUC from {{m0_auc}} to {{m3_auc}} [{{m3_lo}}, {{m3_hi}}] at a held-out perplexity cost of
+{{ppl_delta}}; NPO left {{m1_canary}} extractable at AUC {{m1_auc}}, gradient difference {{m2_canary}} at {{m2_auc}}
+(`bench/results/unlearn-latest.json`). And the un-forgetting: {{relearn_steps}} fine-tuning steps on unrelated
+news text brought {{relearn_npo}} of the NPO-forgotten canaries back. The retrained shards stayed at
+{{relearn_exact}}. The data is not in the weights; nothing can be relearned from it.{{approx_caveat}}
 
 ## The layer nobody can erase
 
@@ -91,20 +89,20 @@ news text brought 1/20 of the NPO-forgotten canaries back. The retrained shards 
 insertion-time routing decisions in the proximity graph, measurable as Top-K centroid drift
 against a same-cluster control, and that a full rebuild does not remove it. On our corpus, after a
 full Tombstone erasure, an attacker estimating "was this subject ever here?" from drift reached
-paired-comparison accuracy of 70.0% at a query budget of 5 and 70.0% at 40
+paired-comparison accuracy of {{drift_acc5}} at a query budget of 5 and {{drift_acc40}} at 40
 (`bench/results/attacks-latest.json`, 7.5). Tombstone measures and reports this. It does not
 claim to fix it, because nothing at the application layer can.
 
 ## The attacks that beat it
 
 We attacked our own eraser and published the rates: data ingested before capture was enabled
-(5/20 of subjects' canaries survive at 30% pre-capture; the refusal fires and the receipt says
-`UNVERIFIED(lineage-gap)`), summaries stored without a `derived_from` edge (20/20 survive; 0/20
-with the edge), a subject quoted in other subjects' documents with no `mentions` edge (20/20 —
+({{a71}} of subjects' canaries survive at 30% pre-capture; the refusal fires and the receipt says
+`UNVERIFIED(lineage-gap)`), summaries stored without a `derived_from` edge ({{a72}} survive; {{a72m}}
+with the edge), a subject quoted in other subjects' documents with no `mentions` edge ({{a74}} —
 non-zero by construction, because searching for them would over-delete other people's data), a
-filesystem snapshot taken before the erasure (10/10 fully recoverable — that is what
-`OUT_OF_SCOPE` means), paraphrased semantic-cache hits (2/20, and the collateral cost of the
-neighbourhood purge), a suppression window under 50 concurrent readers of 244 ms, and the
+filesystem snapshot taken before the erasure ({{a77}} fully recoverable — that is what
+`OUT_OF_SCOPE` means), paraphrased semantic-cache hits ({{a73}}, and the collateral cost of the
+neighbourhood purge), a suppression window under 50 concurrent readers of {{a78_lat}} ms, and the
 relearning attack above. The full table is `RESULTS.md` § "Attacks that work against Tombstone".
 
 ## What this is not
