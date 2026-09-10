@@ -1,0 +1,939 @@
+{
+ "demo1": {
+  "artifacts": 23,
+  "exit": 2,
+  "recoverable": 21,
+  "rows": [
+   {
+    "artifact_id": "01M25PXSS7ENK7ACDP57EFQPCV",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "data_level0.bin:f32le;chroma.sqlite3:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "chroma:kb-v2"
+   },
+   {
+    "artifact_id": "01M25PXSSPHA6BVMCBNN1MMK6J",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "pg_toast.pg_toast_17061:f32le",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "pgvector:kb-v1"
+   },
+   {
+    "artifact_id": "01M25PXSST00GGDA5RVMQ5KJ9A",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "data_level0.bin:f32le;chroma.sqlite3:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "chroma:kb-v2"
+   },
+   {
+    "artifact_id": "01M25PXSSTBC21241V8TC9NMRJ",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "data_level0.bin:f32le;chroma.sqlite3:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "chroma:kb-v2"
+   },
+   {
+    "artifact_id": "01M25PXSTB34WKK531GNFMC7JD",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "documents_embedding_hnsw:f32le",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "pgvector:kb-v1"
+   },
+   {
+    "artifact_id": "01M25PXSTCTM536QM7DV6VQSPD",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "documents_embedding_hnsw:f32le",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "pgvector:kb-v1"
+   },
+   {
+    "artifact_id": "01M25PXSTGAYM214AD1XZNSB64",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "data_level0.bin:f32le;chroma.sqlite3:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "chroma:kb-v2"
+   },
+   {
+    "artifact_id": "01M25PXSV0D3KEZZP7DVNQGPRV",
+    "kind": "embed",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "documents_embedding_hnsw:f32le;pg_toast.pg_toast_17061:f32le",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "pgvector:kb-v1"
+   },
+   {
+    "artifact_id": "01M25PYX2356H8KEN1KFRNZ2DN",
+    "kind": "cache",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": ".langchain.db:cache_key",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "exact-cache"
+   },
+   {
+    "artifact_id": "01M25PYX9HKADPGQC4185F5E3J",
+    "kind": "cache",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": "chroma.sqlite3:artifact_id+f32le",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "semantic-cache"
+   },
+   {
+    "artifact_id": "06ZF105R7E7S6ACHD09448Z8NH",
+    "kind": "train",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": "shard-14.jsonl",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "ft-dataset"
+   },
+   {
+    "artifact_id": "11X5BTTNF6FSC0J803FCVEF53E",
+    "kind": "train",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": "shard-14.jsonl",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "ft-dataset"
+   },
+   {
+    "artifact_id": "1EWBAMDX4YS0KN3K3SF3D6830V",
+    "kind": "chunk",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "1HN4GCTP81KVSDH2ZTQ17VX85K",
+    "kind": "train",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": "shard-14.jsonl",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "ft-dataset"
+   },
+   {
+    "artifact_id": "1MQJWSKCGJ3N3REZP7EWRA60KB",
+    "kind": "source",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "2G047PMJW2MMTTF9B11F7BRNB2",
+    "kind": "adapter",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {
+     "detail": "canary 0/0, MIA not run (no reference set)",
+     "found": false,
+     "measurement": {
+      "canary_extracted": 0.0,
+      "canary_rate": 0.0,
+      "canary_total": 0.0
+     },
+     "method": "canary extraction + MIA"
+    },
+    "physical_detail": "weights rewritten, no original copy remains",
+    "physical_found": false,
+    "physical_reason": "",
+    "state": "GONE",
+    "store": "lora/support-v3"
+   },
+   {
+    "artifact_id": "4CGZTEH6VGHZ1AZPGB1K35G6E7",
+    "kind": "chunk",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "4NM035NMVSY2H4RE6AXCBJM9JD",
+    "kind": "adapter",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {
+     "detail": "canary 0/0, MIA not run (no reference set)",
+     "found": false,
+     "measurement": {
+      "canary_extracted": 0.0,
+      "canary_rate": 0.0,
+      "canary_total": 0.0
+     },
+     "method": "canary extraction + MIA"
+    },
+    "physical_detail": "weights rewritten, no original copy remains",
+    "physical_found": false,
+    "physical_reason": "",
+    "state": "GONE",
+    "store": "lora/support-v3"
+   },
+   {
+    "artifact_id": "60BW4GJ1RD827MPNX5D2SXEHGQ",
+    "kind": "source",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "6602K90NYK95TRTC8647HAP1GW",
+    "kind": "train",
+    "logical_by": [
+     "id"
+    ],
+    "logical_found": true,
+    "model": {},
+    "physical_detail": "shard-14.jsonl",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "PRESENT",
+    "store": "ft-dataset"
+   },
+   {
+    "artifact_id": "67C0SQ063QGPD13MW13DRD6C4F",
+    "kind": "chunk",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "6ZF9233NVD8G7PV0WGYG9DFM2D",
+    "kind": "source",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   },
+   {
+    "artifact_id": "7RZR9DKCZGDWYTHD8C5QVSNEGM",
+    "kind": "chunk",
+    "logical_by": [],
+    "logical_found": false,
+    "model": {},
+    "physical_detail": "docs.sqlite:artifact_id",
+    "physical_found": true,
+    "physical_reason": "",
+    "state": "HIDDEN",
+    "store": "docs"
+   }
+  ],
+  "subject": "509d533ab6e3e1125c16bdecab1fcdfa7afa66739b007132e23b9caac971ce2c",
+  "trace_id": "6CXKYNX9SZ2AZ9CP488HNC0RBP"
+ },
+ "demo2": {
+  "after": {
+   "artifacts": 23,
+   "exit": 0,
+   "recoverable": 0,
+   "rows": [
+    {
+     "artifact_id": "01M25Q09ESAR7K2QDVPK8BG1D5",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9754342 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25Q09F880T9C6XKF6KS3799",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in heap, toast or index",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25Q09FCCBWR7V410Y6W9QP0",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9754342 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25Q09FCF8EYH8KK6CH9GW7H",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9754342 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25Q09FXDEZJTTTVS9D858Z5",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in heap, toast or index",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25Q09FXQAZWDH8MM8SGXYGN",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in heap, toast or index",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25Q09G2GHNQRT41BCFC9Q0W",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9754342 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25Q09GH05M0ZC260Y3ZTXN8",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in heap, toast or index",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25Q1BZJF3TA6R9BE7BX5ZGP",
+     "kind": "cache",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 40960 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "exact-cache"
+    },
+    {
+     "artifact_id": "01M25Q1C0KTT44TCWMCQT07398",
+     "kind": "cache",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9754342 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "semantic-cache"
+    },
+    {
+     "artifact_id": "0AQDSTJJGDMNQXCCGK2E98T91A",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "12GB9FPD97DNN59X0995Q54ABT",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "1CX9K78EKC4Q8JKEDFK2W3F3FP",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "21MNBAYSADEVQAA6TEE4M8P30E",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "2HE01XCWVH9HSR4EQ4VR58Q5V4",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "4ENYKEEE3VKHTJ2H5HP95G48RC",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "4NM035NMVSY2H4RE6AXCBJM9JD",
+     "kind": "adapter",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {
+      "detail": "canary 0/0, MIA not run (no reference set)",
+      "found": false,
+      "measurement": {
+       "canary_extracted": 0.0,
+       "canary_rate": 0.0,
+       "canary_total": 0.0
+      },
+      "method": "canary extraction + MIA"
+     },
+     "physical_detail": "weights rewritten, no original copy remains",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "lora/support-v3"
+    },
+    {
+     "artifact_id": "4NMDVK8T5AGSZFA35ZJGFB0NKA",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "55JQKMAC4XVHR2JNH6BAC7XDRX",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "5E9K2T88WVFB9XAH82792RA822",
+     "kind": "adapter",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {
+      "detail": "canary 0/0, MIA not run (no reference set)",
+      "found": false,
+      "measurement": {
+       "canary_extracted": 0.0,
+       "canary_rate": 0.0,
+       "canary_total": 0.0
+      },
+      "method": "canary extraction + MIA"
+     },
+     "physical_detail": "weights rewritten, no original copy remains",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "lora/support-v3"
+    },
+    {
+     "artifact_id": "5KC8EHGHNZFPQV9KD5STBR5N40",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "61RSPZTXNRQH0GFA0GXT0KWQ62",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "7E94B26DRMY8RZJKJ55TDXB64Z",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    }
+   ],
+   "subject": "43c0277971f16289435b3dc629c06a0583cc001d2feee9c9161da040b163e552",
+   "trace_id": "7JKJW3BMBW90H719YERDT80M6G"
+  },
+  "erase_exit": 2
+ },
+ "demo3": {
+  "after": {
+   "artifacts": 23,
+   "exit": 0,
+   "recoverable": 0,
+   "rows": [
+    {
+     "artifact_id": "01M25QYZ33ZP4Y4VY3TNDMAF1G",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9762466 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25QYZ3HEWCH567EME1KJ37Z",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": null,
+     "physical_reason": "this role cannot read relation files (pg_read_binary_file); grant pg_read_server_files or run the check from a superuser role; this role is not the table owner, so VACUUM/REINDEX are not permitted; pgstattuple is not installed (CREATE EXTENSION pgstattuple)",
+     "state": "HIDDEN?",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25QYZ3M356TM7W4X6FNAFHY",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9762466 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25QYZ3N62ZQ9Y6N766J4N86",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9762466 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25QYZ44H8DXNXK0A292C4HQ",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": null,
+     "physical_reason": "this role cannot read relation files (pg_read_binary_file); grant pg_read_server_files or run the check from a superuser role; this role is not the table owner, so VACUUM/REINDEX are not permitted; pgstattuple is not installed (CREATE EXTENSION pgstattuple)",
+     "state": "HIDDEN?",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25QYZ44MPV5FE35T4MRFJD1",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": null,
+     "physical_reason": "this role cannot read relation files (pg_read_binary_file); grant pg_read_server_files or run the check from a superuser role; this role is not the table owner, so VACUUM/REINDEX are not permitted; pgstattuple is not installed (CREATE EXTENSION pgstattuple)",
+     "state": "HIDDEN?",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25QYZ48K1P6VC4S6KXBH3TP",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9762466 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "chroma:kb-v2"
+    },
+    {
+     "artifact_id": "01M25QYZ4QWTR3E3WNMPNFPVD2",
+     "kind": "embed",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": null,
+     "physical_reason": "this role cannot read relation files (pg_read_binary_file); grant pg_read_server_files or run the check from a superuser role; this role is not the table owner, so VACUUM/REINDEX are not permitted; pgstattuple is not installed (CREATE EXTENSION pgstattuple)",
+     "state": "HIDDEN?",
+     "store": "pgvector:kb-v1"
+    },
+    {
+     "artifact_id": "01M25R01VDEAFK5T8F6JXJC3RB",
+     "kind": "cache",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 40960 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "exact-cache"
+    },
+    {
+     "artifact_id": "01M25R01Y13J9Y9333VWZFPZJ7",
+     "kind": "cache",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 6 file(s), 9762466 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "semantic-cache"
+    },
+    {
+     "artifact_id": "0P06FA77RBNMGA5EBH77NSPR73",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "0TM06EBQHADM68MA2TCY31BD9E",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "1DYPVB0TYXQEW3S8SBMEVCVFJA",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "1SJHX3WHPBKH8T2VWH5BCX95H7",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "1TDWF7GRE8X2E4259BJZZETA99",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "2BWXAGA2AVA14E2M86CAKRHXTC",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "361G872J2AGVTQE5F4TDH0WHG4",
+     "kind": "train",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "ft-dataset"
+    },
+    {
+     "artifact_id": "3ZRR1KNZZSRTGMD0EBNV375BVK",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "40X0BQAFYGP3VS7RZ2VA35NHDP",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "4NM035NMVSY2H4RE6AXCBJM9JD",
+     "kind": "adapter",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {
+      "detail": "canary 0/0, MIA not run (no reference set)",
+      "found": false,
+      "measurement": {
+       "canary_extracted": 0.0,
+       "canary_rate": 0.0,
+       "canary_total": 0.0
+      },
+      "method": "canary extraction + MIA"
+     },
+     "physical_detail": "weights rewritten, no original copy remains",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "lora/support-v3"
+    },
+    {
+     "artifact_id": "4QGH4P2S58FK0VWKV9JPCMVETY",
+     "kind": "adapter",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {
+      "detail": "canary 0/0, MIA not run (no reference set)",
+      "found": false,
+      "measurement": {
+       "canary_extracted": 0.0,
+       "canary_rate": 0.0,
+       "canary_total": 0.0
+      },
+      "method": "canary extraction + MIA"
+     },
+     "physical_detail": "weights rewritten, no original copy remains",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "lora/support-v3"
+    },
+    {
+     "artifact_id": "5H7FKV4Q0VS8STX75JD2JKD8W0",
+     "kind": "chunk",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    },
+    {
+     "artifact_id": "7BRMNDS2TEP3KZB4Q2AXC67535",
+     "kind": "source",
+     "logical_by": [],
+     "logical_found": false,
+     "model": {},
+     "physical_detail": "no match in 1 file(s), 2203648 bytes",
+     "physical_found": false,
+     "physical_reason": "",
+     "state": "GONE",
+     "store": "docs"
+    }
+   ],
+   "subject": "884f9629db8e16482224e090994872923bb379e098c49e5c86484eb39464b177",
+   "trace_id": "181T6RK68CQ82Q9QQX2ZC2804A"
+  },
+  "erase_exit": 2
+ },
+ "generated": "20260910T094941",
+ "git": "32ffae3",
+ "kind": "demo",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "subject": "S-0042"
+}

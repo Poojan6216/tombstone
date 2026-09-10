@@ -23,7 +23,28 @@ LoRA adapter. The operator deletes the way everyone deletes — `vectorstore.del
 both indexes, source rows dropped — and believes the deletion is complete.
 
 <!-- generated:demo1:start -->
-_Run `uv run python bench/demo.py` to generate the demos._
+```text
+$ tombstone verify --subject S-0042 --after-native-delete
+after native delete()
+subject: hmac:509d…ce2c   (raw id never logged)
+artifacts descending from this subject: 23
+
+  source  ×3 docs                   HIDDEN     logical PASS, physical FAIL
+                                               bytes for 3/3 ids located in docs.sqlite
+  chunk   ×4 docs                   HIDDEN     logical PASS, physical FAIL
+                                               bytes for 4/4 ids located in docs.sqlite
+  embed   ×4 chroma:kb-v2           HIDDEN     logical PASS, physical FAIL
+                                               bytes for 4/4 ids located in chroma.sqlite3 + data_level0.bin
+  embed   ×4 pgvector:kb-v1         HIDDEN     logical PASS, physical FAIL
+                                               bytes for 4/4 ids located in documents_embedding_hnsw + pg_toast.pg_toast_17061
+  cache   ×1 exact-cache            PRESENT    cached answer still returned
+  cache   ×1 semantic-cache         PRESENT    cached answer still returned
+  train   ×4 ft-dataset             PRESENT    still retrievable by id
+  adapter ×2 lora/support-v3        GONE       no extraction prompts
+
+verdict: NOT ERASED.  21/23 artifacts still hold recoverable content.
+exit 2
+```
 <!-- generated:demo1:end -->
 
 The deletion was complete at exactly one layer. The full three demos, including the receipt that
@@ -35,7 +56,11 @@ Every number below is produced by a committed command from a committed JSON file
 (`bench/results/`). `RESULTS.md` is generated, never hand-edited.
 
 <!-- generated:headline:start -->
-_Benchmarks have not been run yet; no numbers are claimed._
+<!-- measured:start -->
+1. **After a native `delete()`, 96.6% of a subject's vectors are still physically recoverable** from the index files across the checked backends (chroma 99.8%, faiss 92.0%, qdrant 100.0%, pgvector 94.9%; 200 subjects each), while every one of them is logically gone (100.0% exclusion). After `tombstone erase`, 0.0% of the subjects' own records remain and 0.0% of vectors still have byte-identical copies in the files, all belonging to other subjects' boilerplate and reported UNVERIFIED(duplicate content), never VERIFIED. Source: `bench/results/residue-latest.json`, command `uv run python bench/residue/run_residue.py --all`.
+2. **Exact shard unlearning vs approximate** on `Qwen/Qwen2.5-0.5B` (20 subjects): before, canary extraction 18/20, MIA AUC 1.00 [1.00,1.00], held-out perplexity 205.7; exact shard retrain: canary extraction 0/20, MIA AUC 0.54 [0.36,0.73], held-out perplexity 219.9; NPO: canary extraction 1/20, MIA AUC 0.86 [0.74,0.96], held-out perplexity 242268.7; gradient difference: canary extraction 5/20, MIA AUC 1.00 [1.00,1.00], held-out perplexity 360642.1. Source: `bench/results/unlearn-latest.json`, command `uv run python bench/unlearn/run_unlearn.py --all`.
+3. **The layer nobody can erase**: after a full Tombstone erasure, an attacker estimating "was this subject ever here?" from retrieval-context drift (*Ghost Echoes* protocol) reaches paired-comparison accuracy 70.0% at budget 5, 72.5% at budget 10, 65.0% at budget 20, 70.0% at budget 40. Tombstone measures and reports this; it does not fix it. Source: `bench/results/attacks-latest.json`.
+<!-- measured:end -->
 <!-- generated:headline:end -->
 
 ## Known limitations — read these first
@@ -113,6 +138,30 @@ tombstone mcp                                     # MCP server; erase requires a
 ## Results
 
 <!-- generated:results:start -->
+<!-- measured:start -->
+| backend | method | logical exclusion | physical residue | Recall@5 before → after | wall/erasure |
+|---|---|---|---|---|---|
+| chroma | B0 native delete() | 100.0% | 99.8% | 98.5% → 98.0% | 0.03s |
+| chroma | B1 delete + vendor compact | 100.0% | 100.0% | 98.5% → 98.5% | 0.03s |
+| chroma | B2 delete + full rebuild | 100.0% | 78.6% | 98.5% → 98.5% | 6.74s |
+| chroma | B3 Tombstone suppress only | 100.0% | 100.0% | 98.5% → 98.0% | 11.41s |
+| chroma | B4 Tombstone full | 100.0% | 0.0% | 98.5% → 98.5% | 20.98s |
+| faiss | B0 native delete() | 100.0% | 92.0% | 94.0% → 94.0% | 0.05s |
+| faiss | B1 delete + vendor compact | 100.0% | 92.0% | 94.0% → 94.0% | 0.04s |
+| faiss | B2 delete + full rebuild | 100.0% | 0.0% | 94.0% → 98.5% | 0.46s |
+| faiss | B3 Tombstone suppress only | 100.0% | 100.0% | 94.0% → 94.0% | 8.99s |
+| faiss | B4 Tombstone full | 100.0% | 0.0% | 94.0% → 98.5% | 11.22s |
+| qdrant | B0 native delete() | 100.0% | 100.0% | 98.5% → 98.5% | 0.01s |
+| qdrant | B1 delete + vendor compact | 100.0% | 100.0% | 98.5% → 98.5% | 0.01s |
+| qdrant | B2 delete + full rebuild | 100.0% | 0.0% | 98.5% → 98.5% | 6.16s |
+| qdrant | B3 Tombstone suppress only | 100.0% | 100.0% | 98.5% → 98.5% | 10.47s |
+| qdrant | B4 Tombstone full | 100.0% | 0.0% | 98.5% → 98.5% | 18.92s |
+| pgvector | B0 native delete() | 100.0% | 94.9% | 82.0% → 99.0% | 0.00s |
+| pgvector | B1 delete + vendor compact | 100.0% | 93.2% | 89.5% → 99.0% | 0.04s |
+| pgvector | B2 delete + full rebuild | 100.0% | 92.7% | 85.5% → 99.0% | 0.78s |
+| pgvector | B3 Tombstone suppress only | 100.0% | 100.0% | 86.5% → 86.5% | 7.96s |
+| pgvector | B4 Tombstone full | 100.0% | 0.0% | 88.5% → 99.0% | 10.81s |
+<!-- measured:end -->
 <!-- generated:results:end -->
 
 Full matrices, the hyperparameter grid, the anti-results and the attacks that beat Tombstone:

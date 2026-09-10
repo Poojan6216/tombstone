@@ -1,0 +1,80 @@
+{
+ "composition": {
+  "ensemble": "92/120",
+  "merged": "0/6 (linear sum), 0/6 (cat), 1/6 (linear avg) on the 6-subject diagnostic",
+  "per_shard": "110/120",
+  "shards": 16
+ },
+ "config": {
+  "alpha": 32,
+  "base_model": "Qwen/Qwen2.5-0.5B",
+  "batch_size": 4,
+  "epochs": 12,
+  "lr": 0.001,
+  "max_len": 96,
+  "rank": 16,
+  "repeats": 4,
+  "seed": 20260908,
+  "targets": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "device": "cpu",
+ "generated": "20260910T013240",
+ "git": "bd69413",
+ "grid": [],
+ "kind": "unlearn",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "methods": [
+  {
+   "canary_extracted": 18,
+   "canary_rate": 0.9,
+   "canary_total": 20,
+   "holdout_ppl": 205.73791174762445,
+   "label": "nothing",
+   "method": "serving model unchanged",
+   "mia": {
+    "loss": {
+     "attack": "loss",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    },
+    "mink": {
+     "attack": "mink",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    }
+   },
+   "name": "M0",
+   "note": "shard ensemble; holdout ppl 205.74",
+   "others_extracted": 0,
+   "others_total": 0,
+   "wall_s": 0.0
+  }
+ ],
+ "model": "Qwen/Qwen2.5-0.5B",
+ "partial": true,
+ "relearn": [],
+ "shards": 16,
+ "subjects": 20,
+ "train_shards_s": 3802.7157669067383,
+ "train_subjects": 120,
+ "train_unsharded_s": 3889.8119990825653
+}

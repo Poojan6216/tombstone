@@ -1,0 +1,261 @@
+{
+ "composition": {
+  "ensemble": "92/120",
+  "merged": "0/6 (linear sum), 0/6 (cat), 1/6 (linear avg) on the 6-subject diagnostic",
+  "per_shard": "110/120",
+  "shards": 16
+ },
+ "config": {
+  "alpha": 32,
+  "base_model": "Qwen/Qwen2.5-0.5B",
+  "batch_size": 4,
+  "epochs": 12,
+  "lr": 0.001,
+  "max_len": 96,
+  "rank": 16,
+  "repeats": 4,
+  "seed": 20260908,
+  "targets": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "device": "cpu",
+ "generated": "20260910T045317",
+ "git": "f22a75a",
+ "grid": [
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 423335.103321701,
+   "lr": 5e-05,
+   "method": "npo",
+   "steps": 20,
+   "wall_s": 171.0
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 386266.2471106725,
+   "lr": 0.0001,
+   "method": "npo",
+   "steps": 20,
+   "wall_s": 165.7
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 281161.1961179926,
+   "lr": 0.0003,
+   "method": "npo",
+   "steps": 20,
+   "wall_s": 168.1
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 361646.2916152515,
+   "lr": 5e-05,
+   "method": "npo",
+   "steps": 40,
+   "wall_s": 286.6
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 345374.5758499161,
+   "lr": 0.0001,
+   "method": "npo",
+   "steps": 40,
+   "wall_s": 290.4
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": true,
+   "holdout_ppl": 264168.60137042135,
+   "lr": 0.0003,
+   "method": "npo",
+   "steps": 40,
+   "wall_s": 295.8
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 352825.84425583517,
+   "lr": 5e-05,
+   "method": "npo",
+   "steps": 80,
+   "wall_s": 556.5
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 359957.03926759766,
+   "lr": 0.0001,
+   "method": "npo",
+   "steps": 80,
+   "wall_s": 535.3
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 267470.48818959366,
+   "lr": 0.0003,
+   "method": "npo",
+   "steps": 80,
+   "wall_s": 533.5
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 500691.16137699975,
+   "lr": 5e-05,
+   "method": "gradient_difference",
+   "steps": 20,
+   "wall_s": 145.9
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 686743.9801818118,
+   "lr": 0.0001,
+   "method": "gradient_difference",
+   "steps": 20,
+   "wall_s": 143.9
+  },
+  {
+   "canary_extracted": 0,
+   "canary_total": 4,
+   "chosen": false,
+   "holdout_ppl": 233217250.13836905,
+   "lr": 0.0003,
+   "method": "gradient_difference",
+   "steps": 20,
+   "wall_s": 153.6
+  }
+ ],
+ "kind": "unlearn",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "methods": [
+  {
+   "canary_extracted": 18,
+   "canary_rate": 0.9,
+   "canary_total": 20,
+   "holdout_ppl": 205.73791174762445,
+   "label": "nothing",
+   "method": "serving model unchanged",
+   "mia": {
+    "loss": {
+     "attack": "loss",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    },
+    "mink": {
+     "attack": "mink",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    }
+   },
+   "name": "M0",
+   "note": "shard ensemble; holdout ppl 205.74",
+   "others_extracted": 0,
+   "others_total": 0,
+   "wall_s": 0.0
+  },
+  {
+   "canary_extracted": 0,
+   "canary_rate": 0.0,
+   "canary_total": 20,
+   "holdout_ppl": 219.9241550438201,
+   "label": "Tombstone exact shard retrain",
+   "method": "drop rows, retrain the subject's shard, recompose",
+   "mia": {
+    "loss": {
+     "attack": "loss",
+     "auc": 0.5425,
+     "ci_high": 0.7275,
+     "ci_low": 0.36,
+     "n_members": 20,
+     "n_nonmembers": 20
+    },
+    "mink": {
+     "attack": "mink",
+     "auc": 0.5925,
+     "ci_high": 0.7625,
+     "ci_low": 0.385,
+     "n_members": 20,
+     "n_nonmembers": 20
+    }
+   },
+   "name": "M3",
+   "note": "20 sequential shard retrains; others' canaries [18, 20]",
+   "others_extracted": 18,
+   "others_total": 20,
+   "wall_s": 7652.949640989304
+  },
+  {
+   "canary_extracted": 9,
+   "canary_rate": 0.45,
+   "canary_total": 20,
+   "holdout_ppl": 355633.6047111918,
+   "label": "nothing (unsharded adapter)",
+   "method": "single adapter on all data",
+   "mia": {
+    "loss": {
+     "attack": "loss",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    },
+    "mink": {
+     "attack": "mink",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    }
+   },
+   "name": "M0-unsharded",
+   "note": "reference for M1/M2/M4",
+   "wall_s": 3889.8119990825653
+  }
+ ],
+ "model": "Qwen/Qwen2.5-0.5B",
+ "partial": true,
+ "relearn": [],
+ "shards": 16,
+ "subjects": 20,
+ "train_shards_s": 3802.7157669067383,
+ "train_subjects": 120,
+ "train_unsharded_s": 3889.8119990825653
+}

@@ -71199,7 +71199,7 @@
   "embed_model_pgvector": "bge-small-en-v1.5",
   "subjects": 200
  },
- "generated": "20260910T090704",
+ "generated": "20260910T090703",
  "git": "32599e0",
  "inversion": "not run (see bench/residue/inversion.py)",
  "kind": "residue",
@@ -71209,5 +71209,5 @@
   "platform": "macOS-15.7.9-x86_64-i386-64bit",
   "python": "3.12.13"
  },
- "partial": false
+ "partial": true
 }

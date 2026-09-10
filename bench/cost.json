@@ -103,8 +103,83 @@
    "seconds": 7735.3,
    "subjects": 20,
    "when": "20260909T190649"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-shards",
+   "seconds": 3802.7,
+   "shards": 16,
+   "when": "20260909T202554"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-unsharded",
+   "seconds": 3889.8,
+   "when": "20260909T213043"
+  },
+  {
+   "backends": [
+    "chroma"
+   ],
+   "baselines": [
+    "B4"
+   ],
+   "key": "residue-bench",
+   "seconds": 152.6,
+   "subjects": 4,
+   "when": "20260909T215646"
+  },
+  {
+   "key": "unlearn-M3",
+   "seconds": 7652.9,
+   "subjects": 20,
+   "when": "20260910T035419"
+  },
+  {
+   "key": "unlearn-M1",
+   "seconds": 258.6,
+   "when": "20260910T054051"
+  },
+  {
+   "key": "unlearn-M2",
+   "seconds": 101.6,
+   "when": "20260910T055043"
+  },
+  {
+   "key": "unlearn-M4",
+   "seconds": 2933.9,
+   "when": "20260910T070454"
+  },
+  {
+   "key": "unlearn-bench-total",
+   "seconds": 42143.6,
+   "when": "20260910T070454"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 0.1,
+   "when": "20260910T070545"
+  },
+  {
+   "backends": [
+    "chroma",
+    "faiss",
+    "qdrant",
+    "pgvector"
+   ],
+   "baselines": [
+    "B0",
+    "B1",
+    "B2",
+    "B3",
+    "B4"
+   ],
+   "key": "residue-bench",
+   "seconds": 14046.2,
+   "subjects": 200,
+   "when": "20260910T090704"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 6.527
+ "total_cpu_hours": 27.355
 }
