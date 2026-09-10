@@ -239,8 +239,7 @@ def test_all_stores_opens_a_semantic_cache_beside_its_backing_index(
     cfg_path.write_text(
         cfg_path.read_text().replace(
             "stores:\n",
-            f"stores:\n  - {kb}\n"
-            '  - { name: "cache", kind: cache_semantic, backing: "kb" }\n',
+            f'stores:\n  - {kb}\n  - {{ name: "cache", kind: cache_semantic, backing: "kb" }}\n',
         )
     )
     rt = Runtime.load(cfg_path)
