@@ -26,7 +26,11 @@ def _setup(p: argparse.ArgumentParser) -> Callable[[argparse.Namespace], int]:
     p.add_argument(
         "--public-key",
         default=None,
-        help="PEM public key for --receipt (default: the receipt's embedded key)",
+        help=(
+            "PEM public key for --receipt. Without it the receipt is checked against the key "
+            "printed inside it, which shows only that it was not altered after signing — anyone "
+            "can sign a receipt they wrote. Pass .tombstone/keys/public.pem to check origin."
+        ),
     )
     p.add_argument(
         "--ledger", default=None, help="optional ledger.jsonl to check the chain for --receipt"

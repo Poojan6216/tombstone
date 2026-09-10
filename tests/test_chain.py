@@ -102,3 +102,86 @@ def test_ledger_prev_receipt_hash(tmp_path: Path) -> None:
     assert led.prev_receipt_hash() == GENESIS
     assert led.receipts() == []
     assert led.verify() == 0
+
+
+# --- 5.6: what a signature on a receipt is actually worth ------------------------------------------
+
+
+def _signed(key: object, **over: object) -> object:
+    """A receipt signed by ``key``, with fields overridden."""
+    from tombstone.model.artifacts import Scope, SubjectRef
+    from tombstone.model.status import Receipt
+    from tombstone.receipt.sign import public_key_hex, sign_bytes
+    from tombstone.util import canonical_json
+
+    base: dict[str, object] = {
+        "receipt_id": "01R",
+        "trace_id": "01T",
+        "subject": SubjectRef("a" * 64),
+        "scope": Scope("default"),
+        "reason": "dsr-1",
+        "statuses": [],
+        "needs_human": [],
+        "out_of_scope": ["backups"],
+        "counts": {},
+        "journal_head": "0" * 64,
+        "prev_receipt_hash": "0" * 64,
+        "semantics_version": "1",
+        "created_ms": 1,
+        "notes": [],
+        "signature": "",
+        "public_key": "",
+    }
+    base.update(over)
+    r = Receipt(**base)  # type: ignore[arg-type]
+    sig = sign_bytes(key, canonical_json(r.unsigned_payload()).encode("utf-8"))  # type: ignore[arg-type]
+    return r.with_signature(sig, public_key_hex(key))  # type: ignore[arg-type]
+
+
+def test_a_receipt_checked_against_its_own_key_is_not_evidence_of_origin() -> None:
+    """A receipt carries the key that signed it, and the signature cannot cover that key.
+
+    So anyone can write a receipt, sign it with a key they just generated, and it verifies. The
+    verifier must not call that "OK" — it is integrity, not authenticity — and it must say so,
+    because a receipt is the artifact an operator would hand to an auditor.
+    """
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from tombstone.verify.independent import _check_signature
+
+    operator = Ed25519PrivateKey.generate()
+    attacker = Ed25519PrivateKey.generate()
+
+    genuine = _signed(operator)
+    forged = _signed(attacker, reason="forged-by-attacker", notes=["erasure complete"])
+
+    # both verify against their own embedded key — that is the whole point of the finding
+    for r in (genuine, forged):
+        ok, trust = _check_signature(r, None)  # type: ignore[arg-type]
+        assert ok, "a self-consistent receipt does verify against its own key"
+        assert "not who signed it" in trust, trust
+        assert "--public-key" in trust, "must say how to get a real answer"
+
+
+def test_an_operator_supplied_key_rejects_the_forgery(tmp_path: Path) -> None:
+    """With the operator's real public key, the forged receipt is caught."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from tombstone.verify.independent import _check_signature
+
+    operator = Ed25519PrivateKey.generate()
+    attacker = Ed25519PrivateKey.generate()
+    pem = tmp_path / "public.pem"
+    pem.write_bytes(
+        operator.public_key().public_bytes(
+            serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    )
+
+    ok, trust = _check_signature(_signed(operator), pem)  # type: ignore[arg-type]
+    assert ok and str(pem) in trust
+
+    ok, trust = _check_signature(_signed(attacker, reason="forged"), pem)  # type: ignore[arg-type]
+    assert not ok, "a receipt signed by another key must not verify against the operator's"
+    assert "different key" in trust, trust

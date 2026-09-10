@@ -191,7 +191,12 @@ def test_independent_verifier_catches_reinserted_vector(
     rt.close()
     res = verify_receipt_independently(path, pub, tmp_path / ".tombstone" / "ledger.jsonl", cfg)
     assert res["ok"], res["text"]
+    # the operator's own public key is passed here, so this is a statement about origin
     assert "signature: ed25519 OK" in res["text"] and "chain: OK" in res["text"]
+    assert str(pub) in res["text"], "the verifier must name the key it trusted"
+    # ...and without it, the same receipt is only self-consistent, which it must say plainly
+    solo = verify_receipt_independently(path, None, tmp_path / ".tombstone" / "ledger.jsonl", cfg)
+    assert "signature: ed25519 self-asserted" in solo["text"], solo["text"]
     # re-insert one deleted vector behind the tool's back
     from tombstone.registry import Runtime
 

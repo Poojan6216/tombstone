@@ -21,7 +21,12 @@ from tombstone.config import load_config
 from tombstone.errors import ChainBroken, NotSupported, SignatureInvalid
 from tombstone.model.status import Outcome, Receipt, VerifyLevel
 from tombstone.receipt.ledger import Ledger
-from tombstone.receipt.sign import load_public_key, public_key_from_hex, verify_bytes
+from tombstone.receipt.sign import (
+    load_public_key,
+    public_key_from_hex,
+    public_key_hex,
+    verify_bytes,
+)
 from tombstone.registry import Runtime
 from tombstone.stores.base import ProbeSet
 from tombstone.util import canonical_json
@@ -30,18 +35,35 @@ from tombstone.verify.logical import padded_fingerprint
 _ID_KEYS = {"matches_artifact_id", "matches_id", "matches_cache_key"}
 
 
-def _check_signature(receipt: Receipt, public_key_pem: Path | None) -> bool:
-    key = (
-        load_public_key(public_key_pem)
-        if public_key_pem
-        else public_key_from_hex(receipt.public_key)
-    )
+def _check_signature(receipt: Receipt, public_key_pem: Path | None) -> tuple[bool, str]:
+    """(verified?, what that verification is worth).
+
+    A receipt carries the public key that signed it, and ``public_key`` is deliberately *not*
+    inside ``unsigned_payload()`` — it cannot be, since the signature is over the payload. So
+    checking a receipt against its own embedded key proves the bytes were not altered after
+    signing; it proves nothing about *who* signed. Anyone can write a receipt, sign it with a key
+    they generated, and it verifies. Only a key obtained out of band — the operator's
+    ``.tombstone/keys/public.pem`` — turns that into a statement about origin, and the caller is
+    told which of the two they got.
+    """
     payload = canonical_json(receipt.unsigned_payload()).encode("utf-8")
+    if public_key_pem is not None:
+        key = load_public_key(public_key_pem)
+        if public_key_hex(key) != receipt.public_key:
+            return False, f"the receipt was signed by a different key than {public_key_pem}"
+        trust = f"verified against {public_key_pem}"
+    else:
+        key = public_key_from_hex(receipt.public_key)
+        trust = (
+            "key taken from the receipt itself: this shows the receipt was not altered after "
+            "signing, not who signed it. Pass --public-key .tombstone/keys/public.pem to check "
+            "it came from your installation"
+        )
     try:
         verify_bytes(key, payload, receipt.signature)
-        return True
+        return True, trust
     except SignatureInvalid:
-        return False
+        return False, trust
 
 
 def _check_chain(receipt: Receipt, ledger: Path) -> tuple[bool, str]:
@@ -60,6 +82,21 @@ def _check_chain(receipt: Receipt, ledger: Path) -> tuple[bool, str]:
     expected_prev = prev_receipts[-1].hash if prev_receipts else "0" * 64
     if receipt.prev_receipt_hash != expected_prev:
         return False, "chain: prev_receipt_hash does not match the ledger"
+    # A receipt verified against its own embedded key says nothing about origin, but the ledger
+    # gives a second opinion for free: every receipt in one installation's ledger should be signed
+    # by that installation's key. One that is not was signed by someone else, whatever its own
+    # signature says.
+    others = {
+        str(r.body.get("public_key"))
+        for r in records
+        if r.type == Ledger.RECEIPT and r.body.get("public_key")
+    } - {receipt.public_key}
+    if others:
+        return (
+            False,
+            f"chain: receipt at index {idx} is signed by a key that signs none of the other "
+            f"{len(prev_receipts)} receipt(s) in this ledger ({len(others)} other key(s) present)",
+        )
     return True, f"chain: OK ({n} records, receipt at index {idx})"
 
 
@@ -103,8 +140,13 @@ def verify_receipt_independently(
     lines: list[str] = [
         f"receipt {receipt.receipt_id}  trace {receipt.trace_id}  subject {receipt.subject.short}"
     ]
-    ok = _check_signature(receipt, public_key_pem)
-    lines.append("signature: ed25519 OK" if ok else "signature: INVALID")
+    ok, trust = _check_signature(receipt, public_key_pem)
+    if not ok:
+        lines.append(f"signature: INVALID ({trust})")
+    elif public_key_pem is not None:
+        lines.append(f"signature: ed25519 OK ({trust})")
+    else:
+        lines.append(f"signature: ed25519 self-asserted — {trust}")
     if ledger is not None:
         chain_ok, msg = _check_chain(receipt, ledger)
         lines.append(msg)

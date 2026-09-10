@@ -48,6 +48,29 @@ effect rather than refute it. This is the one layer we publish as unfixable: no 
 performs moves this number, because the trace is in the surviving neighbours' geometry, not in
 anything the deleted record still owns.
 
+### 3b. A receipt verified against its own key proves integrity, not origin
+
+A receipt carries the Ed25519 public key that signed it, and the signature cannot cover that key
+— the signature is over the payload, and the key is what checks the signature. So
+`tombstone verify --receipt r.json` *without* `--public-key` answers a narrower question than it
+looks: were these bytes altered after signing? Anyone can write a receipt, sign it with a key
+they generated a second ago, and it verifies. We demonstrated exactly that against our own
+verifier, including a forged receipt whose notes read "erasure complete".
+
+Two things close it, and the verifier now distinguishes them in its output rather than printing
+`OK` for both:
+
+- **Pass the operator's key.** `--public-key .tombstone/keys/public.pem` makes it a statement
+  about origin, and a receipt signed by any other key is rejected with that reason. Without it the
+  output says `signature: ed25519 self-asserted` and explains what that does and does not mean.
+- **Pass the ledger.** Every receipt in one installation's ledger should be signed by that
+  installation's key; one that is not was signed by someone else, whatever its own signature says.
+  `--ledger` now fails on that mismatch as well as on a broken hash chain.
+
+Neither helps if the attacker owns the machine and rewrites the ledger and the keypair together.
+Against that, the receipt is evidence only to the extent the *verifier's* copy of the public key
+came from somewhere the attacker does not control.
+
 ### 4. Backups, replicas, WAL, provider-side logs (7.7)
 
 A filesystem snapshot taken before the erasure holds every vector; so does a `pg_dump`; so may

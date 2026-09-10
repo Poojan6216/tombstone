@@ -54,6 +54,10 @@ _Benchmarks have not been run yet; no numbers are claimed._
   says `UNVERIFIED-managed`, and that is the correct answer.
 - **Backups, snapshots, replicas, WAL and provider-side logs are out of scope** and always listed
   as such (7.7).
+- **A receipt checked against its own key proves it was not altered, not who wrote it.** The
+  signing key travels inside the receipt, so verification without `--public-key` is integrity
+  only; pass the operator's `.tombstone/keys/public.pem` (and `--ledger`) to make it a statement
+  about origin. The verifier says which of the two you got ([threat model](docs/threat-model.md)).
 - **A receipt is a record, not a legal instrument.** It states what was done and checked. Whether
   that satisfies a regulator is a question for a lawyer, and the tool says so in its output.
 - **Derived content the app does not stamp is invisible** (7.2). **Single scope per erasure.**
