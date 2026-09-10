@@ -6,7 +6,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-from tombstone._checks import check_banned_words, check_readme_numbers
+from tombstone._checks import (
+    check_banned_words,
+    check_docs_have_measured_numbers,
+    check_readme_numbers,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -192,3 +196,35 @@ def test_chroma_phone_home_stays_disabled() -> None:
     """Chroma's client reports anonymous usage by default; the store must keep it switched off."""
     src = (ROOT / "src" / "tombstone" / "stores" / "chroma.py").read_text(encoding="utf-8")
     assert "anonymized_telemetry=False" in src, "Chroma telemetry is no longer disabled"
+
+
+def test_docs_number_detector_has_power(tmp_path: Path) -> None:
+    """9.2's check must catch a doc that cites nothing measured, and must not be satisfied by a
+    number that only collides with a result file by accident."""
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "r.json").write_text('{"rate": 0.725, "subjects": 16}', encoding="utf-8")
+    docs = tmp_path / "docs"
+    docs.mkdir()
+
+    (docs / "cites.md").write_text("the attack succeeds 72.5% of the time", encoding="utf-8")
+    (docs / "prose.md").write_text("see section 7.5; we ran 16 shards", encoding="utf-8")
+    problems = check_docs_have_measured_numbers(docs, results)
+    named = {Path(p.split(":")[0]).name for p in problems}
+    assert named == {"prose.md"}, problems  # 16 collides by luck; 7.5 is a section number
+
+
+def test_docs_cite_measured_numbers_that_are_ready() -> None:
+    """The real docs, minus the two still waiting on runs in flight.
+
+    ``demo.md`` is regenerated with its own result file once the unlearning adapters exist, and
+    ``writeup.md`` (9.5) is written against the final numbers; both are expected to fail until
+    then, and this test tightens to the whole directory when they land.
+    """
+    pending = {"demo.md", "writeup.md"}
+    problems = [
+        p
+        for p in check_docs_have_measured_numbers(ROOT / "docs", ROOT / "bench" / "results")
+        if Path(p.split(":")[0]).name not in pending
+    ]
+    assert not problems, problems

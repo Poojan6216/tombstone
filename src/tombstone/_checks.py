@@ -2,6 +2,7 @@
 
 Usage: ``python -m tombstone._checks banned-words [paths...]``
        ``python -m tombstone._checks readme-numbers README.md bench/results``
+       ``python -m tombstone._checks docs-numbers docs bench/results``
 """
 
 from __future__ import annotations
@@ -122,6 +123,39 @@ def check_readme_numbers(readme: Path, results_dir: Path) -> list[str]:
     return problems
 
 
+def _is_distinctive(token: str) -> bool:
+    """Is this number specific enough that matching a result file means something?
+
+    Three or more significant digits. "16" or "7.5" collide with a result file by accident — and
+    "7.5" is a section number in half these docs — so a doc could satisfy the rule while citing
+    nothing measured. "82.5" or "0.665" do not collide by luck.
+    """
+    digits = token.replace(".", "").replace("-", "").lstrip("0")
+    return len(digits) >= 3
+
+
+def check_docs_have_measured_numbers(docs_dir: Path, results_dir: Path) -> list[str]:
+    """9.2: every doc must contain at least one number that traces to a committed run.
+
+    A doc about verification that quotes no measurement is a brochure. This is deliberately the
+    weak form of the README rule — docs carry plenty of untraceable prose numbers (a section
+    reference, a shard count in an example) and that is fine; what is not fine is a doc with no
+    contact whatsoever with a result file.
+    """
+    allowed = _collect_result_numbers(results_dir)
+    problems: list[str] = []
+    for doc in sorted(docs_dir.glob("*.md")):
+        text = doc.read_text(encoding="utf-8")
+        if any(
+            _is_distinctive(m.group(1)) and m.group(1) in allowed for m in _NUM_RE.finditer(text)
+        ):
+            continue
+        problems.append(
+            f"{doc}: no distinctive number traces to {results_dir}; it cites no measured result"
+        )
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
@@ -137,6 +171,13 @@ def main(argv: list[str] | None = None) -> int:
         readme = Path(rest[0]) if rest else Path("README.md")
         results = Path(rest[1]) if len(rest) > 1 else Path("bench/results")
         problems = check_readme_numbers(readme, results)
+        for p in problems:
+            sys.stderr.write(p + "\n")
+        return 1 if problems else 0
+    if cmd == "docs-numbers":
+        docs = Path(rest[0]) if rest else Path("docs")
+        results = Path(rest[1]) if len(rest) > 1 else Path("bench/results")
+        problems = check_docs_have_measured_numbers(docs, results)
         for p in problems:
             sys.stderr.write(p + "\n")
         return 1 if problems else 0

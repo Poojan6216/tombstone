@@ -14,6 +14,7 @@ the model rows are reported as not run rather than faked.
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,7 @@ from _common import (
     fresh_pg_database,
     pg_dsn,
     reset_dir,
+    save_results,
     write_config,
 )
 from corpus.build import Doc, load_corpus
@@ -55,6 +57,21 @@ def cli(args: list[str], cwd: Path) -> tuple[int, str]:
     return p.returncode, (
         p.stdout + ("\n" + p.stderr if p.returncode not in (0, 2) else "")
     ).rstrip()
+
+
+def cli_facts(args: list[str], cwd: Path) -> dict[str, Any]:
+    """The same command again with ``--json``, for the numbers docs/demo.md quotes.
+
+    Only ever called on read-only commands (``verify``): re-running ``erase`` to collect its
+    numbers would perform a second erasure and report on a state the transcript never showed.
+    """
+    code, out = cli([*args, "--json"], cwd)
+    try:
+        data: dict[str, Any] = json.loads(out)
+    except ValueError as e:  # a demo that cannot show its own numbers is a broken demo
+        raise SystemExit(f"demo: {' '.join(args)} --json did not return JSON: {out[:200]}") from e
+    data["exit"] = code
+    return data
 
 
 def build_app(
@@ -166,6 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     public_docs = [d for d in docs if d.subject == "PUBLIC"][:1200]
     corpus = subject_docs + public_docs
     adapters = None if ns.no_model else WORK / "unlearn" / "adapters"
+    facts: dict[str, Any] = {"subject": subject}
     dsn_base = pg_dsn()
     out: list[str] = [
         "# Demos",
@@ -192,6 +210,18 @@ def main(argv: list[str] | None = None) -> int:
     )  # type: ignore[attr-defined]
     rt.close()
     code, text = cli(
+        [
+            "verify",
+            "--config",
+            str(h["cfg"]),
+            "--subject",
+            subject,
+            "--after-native-delete",
+            "--no-store-scan",
+        ],
+        root,
+    )
+    facts["demo1"] = cli_facts(
         [
             "verify",
             "--config",
@@ -235,6 +265,12 @@ def main(argv: list[str] | None = None) -> int:
         ],
         root,
     )
+    facts["demo2"] = {
+        "erase_exit": code,
+        "after": cli_facts(
+            ["verify", "--config", str(h["cfg"]), "--subject", subject, "--no-store-scan"], root
+        ),
+    }
     out += [
         "## Demo 2 — the cascade, and what it can honestly claim",
         "",
@@ -278,6 +314,12 @@ def main(argv: list[str] | None = None) -> int:
         ],
         root,
     )
+    facts["demo3"] = {
+        "erase_exit": code,
+        "after": cli_facts(
+            ["verify", "--config", str(h["cfg"]), "--subject", subject, "--no-store-scan"], root
+        ),
+    }
     out += [
         "## Demo 3 — the honest one",
         "",
@@ -293,7 +335,9 @@ def main(argv: list[str] | None = None) -> int:
         "",
     ]
     DOC.write_text("\n".join(out), encoding="utf-8")
-    print(f"wrote {DOC}", file=sys.stderr)
+    # every number in docs/demo.md must be readable as data, not only as a transcript
+    path = save_results("demo", facts)
+    print(f"wrote {DOC} and {path}", file=sys.stderr)
     return 0
 
 

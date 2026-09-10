@@ -29,6 +29,8 @@ jobs:
         run: uv run python -m tombstone._checks banned-words README.md src docs RESULTS.md CHANGELOG.md
       - name: README numbers trace to committed results (Hard Rule 12)
         run: uv run python -m tombstone._checks readme-numbers README.md bench/results
+      - name: every doc cites at least one measured number (9.2)
+        run: uv run python -m tombstone._checks docs-numbers docs bench/results
 
   core-import-is-light:
     runs-on: ubuntu-latest

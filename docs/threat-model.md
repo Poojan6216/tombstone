@@ -38,8 +38,15 @@ insertion-time routing decisions persist in the neighbours' geometry, and a full
 remove it (*Ghost Echoes*, arXiv 2608.20352). Tombstone reproduces the measurement on its own
 corpus, reports drift against a same-cluster control with a CI, and marks the artifact
 `RESIDUAL(semantic)` when the CI excludes the control. It never blocks on it and never claims to
-fix it. An attacker with a query budget can estimate "was this subject ever here?" at the
-accuracies in `RESULTS.md`.
+fix it.
+
+Measured on our corpus (`bench/results/attacks-latest.json`, strategy 7.5, n=40 subjects): after a
+full Tombstone erasure — suppress, reclaim, verify — an attacker who calibrates a threshold on
+known subjects still separates erased from never-present at **70.0%** with a query budget of 5,
+and **72.5%** at a budget of 10, against a 50% coin. The paper reports 61.1%; we reproduce the
+effect rather than refute it. This is the one layer we publish as unfixable: no erasure Tombstone
+performs moves this number, because the trace is in the surviving neighbours' geometry, not in
+anything the deleted record still owns.
 
 ### 4. Backups, replicas, WAL, provider-side logs (7.7)
 
