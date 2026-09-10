@@ -1,0 +1,77 @@
+name: release
+
+# Fires only on a version tag. Publishing is a separate, protected job: it needs the `release`
+# environment, so a tag alone cannot push to PyPI without a human approving the deployment.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+
+      # A release must not ship a claim the repo cannot back up.
+      - name: banned words (Hard Rule 2)
+        run: uv run python -m tombstone._checks banned-words README.md src docs RESULTS.md CHANGELOG.md
+      - name: README numbers trace to committed results (Hard Rule 12)
+        run: uv run python -m tombstone._checks readme-numbers README.md bench/results
+      - run: uv run ruff check src tests bench
+      - run: uv run mypy --strict src/
+      - run: uv run pytest -q -m "not train and not slow" --timeout=1800
+
+      - name: version in the tag matches the version in pyproject
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(uv run python -c "import tomllib,pathlib;print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+          test "$tag" = "$pkg" || { echo "tag $tag != pyproject $pkg"; exit 1; }
+
+      - run: uv build
+      - name: the wheel installs and runs on a clean machine
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/python -m pip install --quiet dist/*.whl
+          /tmp/clean/bin/tombstone --help
+          /tmp/clean/bin/python -c "import tombstone, tombstone.cli, tombstone.commands, sys; \
+            heavy=[m for m in sys.modules if m.split('.')[0] in {'torch','langchain','chromadb','faiss','qdrant_client','psycopg','numpy'}]; \
+            assert not heavy, heavy"
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist/* }
+
+  github-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist }
+      - name: draft the release with the measured results attached
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            dist/*
+            RESULTS.md
+          body_path: CHANGELOG.md
+
+  pypi:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: release        # requires a reviewer to approve the deployment
+    permissions: { id-token: write }   # PyPI trusted publishing; no API token in secrets
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist }
+      - uses: pypa/gh-action-pypi-publish@release/v1
