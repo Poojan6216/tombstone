@@ -115,8 +115,8 @@ Measured before choosing (source `bench/results/composition-latest.json`): each 
 ## Anti-results
 
 - **Semantic drift survives a full Tombstone erasure**: an attacker reaches 72.5% paired accuracy [95% CI 57.5%, 85.0%] at a query budget of 10 (n=40) asking whether a subject was ever in the index, against a same-cluster control matched on Top-K slots vacated. Pooled across subjects the same attacker reaches AUC 0.58, so the signal is strongest when a control for the very subject is available. Tombstone measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352).
-- **Approximate unlearning leaves residual extractability (NPO)**: canary 1/20 still extractable, MIA AUC 0.86 [0.74,0.96]; exact shard retrain (M3) side by side above.
-- **Approximate unlearning leaves residual extractability (gradient difference)**: canary 5/20 still extractable, MIA AUC 1.00 [1.00,1.00]; exact shard retrain (M3) side by side above.
+- **Approximate unlearning (NPO) has no result in this run.** It is applied to the unsharded adapter, whose held-out perplexity is 355634 against 205.74 for the shard ensemble: that model had collapsed before any unlearning ran, so its canary and MIA numbers (1/20 extractable) describe a broken model, not the method. See the unlearning matrix.
+- **Approximate unlearning (gradient difference) has no result in this run.** It is applied to the unsharded adapter, whose held-out perplexity is 355634 against 205.74 for the shard ensemble: that model had collapsed before any unlearning ran, so its canary and MIA numbers (5/20 extractable) describe a broken model, not the method. See the unlearning matrix.
 
 ## Attacks that work against Tombstone
 
@@ -133,3 +133,5 @@ Command: `uv run python bench/adversarial/run_attacks.py --all` (source `bench/r
 | 7.7 backup and replica | every vector, in the snapshot taken before erasure | filesystem snapshot of the Chroma dir: 10/10 subjects fully recoverable after a VERIFIED erasure; pg_dump: 3/3 recoverable | none possible from inside the application: receipts listed 'database backups and snapshots' as OUT_OF_SCOPE in 10/10 cases; backup retention policy is the operator's |
 | 7.8 suppression race under 50 concurrent readers | queries answered between the CLI call and the durable suppression record | hits after the durable suppression entry: 0 (over 5 erasures); hits before it: 5161; suppression latency median 244 ms | the window is the suppression latency; suppression is the first journaled step and the wrapper consults the tombstone set on every query |
 | 7.9 concurrent erasures with shared chunks | nothing, when the final state is exactly the set difference | 6/6 concurrent pairs ended in exactly the set difference; 0 clean failures/leftovers | shared chunks are traced by both subjects; each saga tombstones its own trace, the journal lock serialises writes; see tests/test_concurrency.py for the property test |
+
+On 7.6: the NPO and gradient-difference rows start from the unsharded adapter, whose held-out perplexity is 355634 against 205.74 for the shard ensemble. Continued training on benign text partly repairs a model in that state, and a repaired model reproduces what it memorised, so a canary reappearing there is not evidence that approximate unlearning suppressed rather than removed. The exact rows are unaffected and stay at 0/60.

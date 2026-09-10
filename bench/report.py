@@ -237,7 +237,7 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
     return lines
 
 
-def attacks_section(a: dict[str, Any]) -> list[str]:
+def attacks_section(a: dict[str, Any], u: dict[str, Any] | None = None) -> list[str]:
     lines = [
         "## Attacks that work against Tombstone",
         "",
@@ -251,6 +251,23 @@ def attacks_section(a: dict[str, Any]) -> list[str]:
         lines.append(
             f"| {s['id']} {s['name']} | {s['survives']} | {s['rate_text']} | {s['mitigation']} |"
         )
+    # 7.6's approximate arms run on the unsharded adapter. If that adapter had collapsed, their
+    # resurfacing numbers cannot be told apart from the model simply becoming coherent again, and
+    # the row must not read as a finding about NPO or gradient difference.
+    if u and any(s["id"] == "7.6" for s in a["strategies"]):
+        by_name = {x["name"]: x for x in u.get("methods", [])}
+        flat = by_name.get("M0-unsharded", {}).get("holdout_ppl")
+        ens = by_name.get("M0", {}).get("holdout_ppl")
+        if flat and ens and flat > DEGENERATE_PPL_RATIO * ens:
+            lines += [
+                "",
+                f"On 7.6: the NPO and gradient-difference rows start from the unsharded adapter, "
+                f"whose held-out perplexity is {_f(flat, 0)} against {_f(ens, 2)} for the shard "
+                f"ensemble. Continued training on benign text partly repairs a model in that "
+                f"state, and a repaired model reproduces what it memorised, so a canary "
+                f"reappearing there is not evidence that approximate unlearning suppressed rather "
+                f"than removed. The exact rows are unaffected and stay at 0/60.",
+            ]
     return lines
 
 
@@ -338,9 +355,25 @@ def regenerate() -> Path:
                 "measures this and reports it; it does not fix it (*Ghost Echoes*, arXiv 2608.20352)."
             )
     if u:
+        # An anti-result has to be a result first. M1 and M2 act on the unsharded adapter, so if
+        # that adapter had already collapsed there is no finding here to report — publishing one
+        # anyway would be the same over-claim this file exists to avoid.
+        by_name = {x["name"]: x for x in u["methods"]}
+        flat_ppl = by_name.get("M0-unsharded", {}).get("holdout_ppl")
+        ens_ppl = by_name.get("M0", {}).get("holdout_ppl")
+        approx_degenerate = bool(flat_ppl and ens_ppl and flat_ppl > DEGENERATE_PPL_RATIO * ens_ppl)
         for name in ("M1", "M2"):
-            m = next((x for x in u["methods"] if x["name"] == name), None)
-            if m:
+            m = by_name.get(name)
+            if m and approx_degenerate:
+                anti.append(
+                    f"- **Approximate unlearning ({m['label']}) has no result in this run.** It is "
+                    f"applied to the unsharded adapter, whose held-out perplexity is "
+                    f"{_f(flat_ppl, 0)} against {_f(ens_ppl, 2)} for the shard ensemble: that model "
+                    f"had collapsed before any unlearning ran, so its canary and MIA numbers "
+                    f"({m['canary_extracted']}/{m['canary_total']} extractable) describe a broken "
+                    f"model, not the method. See the unlearning matrix."
+                )
+            elif m:
                 loss = m.get("mia", {}).get("loss", {})
                 anti.append(
                     f"- **Approximate unlearning leaves residual extractability ({m['label']})**: canary {m['canary_extracted']}/{m['canary_total']} still extractable, MIA AUC {_f(loss.get('auc'), 2)} [{_f(loss.get('ci_low'), 2)},{_f(loss.get('ci_high'), 2)}]; exact shard retrain (M3) side by side above."
@@ -348,7 +381,7 @@ def regenerate() -> Path:
     lines += anti or ["_No anti-results committed yet._"]
     lines.append("")
     if a:
-        lines += attacks_section(a) + [""]
+        lines += attacks_section(a, u) + [""]
     OUT.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
     return OUT
 
