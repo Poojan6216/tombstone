@@ -119,7 +119,7 @@ def measure(
     reference: list[str],
 ) -> dict[str, Any]:
     tok, model = load_adapter_model(base_model, model_dir)
-    h, n, _ = canary_extraction_rate(tok, model, targets)
+    h, n, hits = canary_extraction_rate(tok, model, targets)
     ho, no, _ = canary_extraction_rate(tok, model, others) if others else (0, 0, [])
     ppl = perplexity(tok, model, holdout[:60])
     mia = membership_inference(tok, model, members, reference[: len(members)]) if members else {}
@@ -127,6 +127,13 @@ def measure(
         "canary_extracted": h,
         "canary_total": n,
         "canary_rate": h / max(1, n),
+        # which subjects, not just how many: the serving ensemble does not memorise every canary
+        # (76.7% of 120 on this run), so "0/N after unlearning" counts canaries that were never
+        # extractable to begin with. Keeping the per-subject outcome makes the conditional rate —
+        # of those extractable before, how many survived — computable without re-running.
+        "canary_hits_by_subject": {
+            c.subject_id: bool(hit) for c, hit in zip(targets, hits, strict=True)
+        },
         "others_extracted": ho,
         "others_total": no,
         "holdout_ppl": ppl,
@@ -257,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     )
     _checkpoint(snapshot())
+    exact_by_subject: dict[str, bool] = {}
     # M3 exact: unlearn each measured subject in turn (cumulative), measure after each
     t0 = time.time()
     ex_hits = 0
@@ -292,6 +300,7 @@ def main(argv: list[str] | None = None) -> int:
         tok, serving = load_adapter_model(MODEL, adapters / "serving")
         h, _, _ = canary_extraction_rate(tok, serving, [canaries[s]])
         ex_hits += h
+        exact_by_subject[s] = bool(h)
         if i == 0:
             others = [canaries[o] for o in subjects_all if o != s][:20]
             ho, no, _ = canary_extraction_rate(tok, serving, others)
@@ -307,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             "canary_extracted": ex_hits,
             "canary_total": len(measured),
             "canary_rate": ex_hits / max(1, len(measured)),
+            "canary_hits_by_subject": exact_by_subject,
             "others_extracted": ex_others[0] if ex_others else 0,
             "others_total": ex_others[1] if ex_others else 0,
             "holdout_ppl": perplexity(tok, serving, holdout[:60]),
