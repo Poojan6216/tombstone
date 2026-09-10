@@ -19,6 +19,7 @@ import json
 import shutil
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -171,7 +172,13 @@ def main(argv: list[str] | None = None) -> int:
     t_shards = time.time() - t0
     cost_add("unlearn-train-shards", t_shards, {"shards": ns.shards, "examples": ds.count()})
     t0 = time.time()
-    train_unsharded(ds, adapters / "unsharded", cfg, log=log)
+    # The unsharded adapter sees every shard's examples at once, so at the shards' learning rate
+    # it takes roughly an order of magnitude more optimizer steps and overfits into gibberish:
+    # at lr=1e-3 it reached a held-out perplexity of 355,633 against the ensemble's 205, and
+    # extracted *fewer* canaries than the ensemble despite training on the same data. It is the
+    # baseline M1, M2 and M4 are measured against, so it has to be a usable model.
+    flat_cfg = replace(cfg, lr=2e-4)
+    train_unsharded(ds, adapters / "unsharded", flat_cfg, log=log)
     t_flat = time.time() - t0
     cost_add("unlearn-train-unsharded", t_flat, {"examples": ds.count()})
     # --- register adapters in lineage --------------------------------------------------------------
@@ -331,10 +338,21 @@ def main(argv: list[str] | None = None) -> int:
     tok, fm = load_adapter_model(MODEL, flat)
     ppl_flat = perplexity(tok, fm, holdout[:60])
     hf, nf, _ = canary_extraction_rate(tok, fm, [canaries[s] for s in measured])
+    # Decision gate 3: do not measure forgetting on a model that never learned. M1/M2/M4 all act
+    # on this adapter, so if it is already broken their numbers describe the damage, not the
+    # method. Say so in the log and record it, rather than let the matrix imply otherwise.
+    flat_degenerate = base_ppl > 0 and ppl_flat > 20.0 * base_ppl
+    if flat_degenerate:
+        log(
+            f"WARNING unsharded baseline is degenerate: holdout ppl {ppl_flat:.0f} vs "
+            f"{base_ppl:.2f} for the ensemble ({ppl_flat / base_ppl:.0f}x worse), canaries "
+            f"{hf}/{nf}. M1, M2 and M4 measure damage to an already-broken model, not unlearning."
+        )
     methods.append(
         {
             "name": "M0-unsharded",
             "label": "nothing (unsharded adapter)",
+            "degenerate_baseline": flat_degenerate,
             "method": "single adapter on all data",
             "canary_extracted": hf,
             "canary_total": nf,

@@ -124,6 +124,9 @@ def semantic_section(a: dict[str, Any]) -> list[str]:
     return lines
 
 
+DEGENERATE_PPL_RATIO = 20.0  # a baseline this much worse than the ensemble is not a baseline
+
+
 def unlearn_section(u: dict[str, Any]) -> list[str]:
     lines = [
         "## Unlearning matrix (model side)",
@@ -153,6 +156,32 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
             f"{_f(mink.get('auc'), 2)} [{_f(mink.get('ci_low'), 2)},{_f(mink.get('ci_high'), 2)}] | "
             f"{_f(ppl, 2)}{delta} | {m.get('wall_s', 0):.0f}s | {m.get('note', '')} |"
         )
+    # M1, M2 and M4 all act on the unsharded adapter, so they are only interpretable if that
+    # adapter was a usable model to begin with. Comparing the two baselines that the run already
+    # measured says whether it was — no extra measurement, and it cannot be forgotten.
+    flat_ppl = next(
+        (m.get("holdout_ppl") for m in u["methods"] if m["name"] == "M0-unsharded"), None
+    )
+    degenerate = (
+        base_ppl is not None
+        and flat_ppl is not None
+        and base_ppl > 0
+        and flat_ppl > DEGENERATE_PPL_RATIO * base_ppl
+    )
+    if degenerate:
+        assert flat_ppl is not None and base_ppl is not None
+        lines += [
+            "",
+            f"> **M1, M2 and M4 are not interpretable in this run.** They are applied to the "
+            f"unsharded adapter, whose held-out perplexity is {_f(flat_ppl, 0)} against "
+            f"{_f(base_ppl, 2)} for the shard ensemble — {flat_ppl / base_ppl:,.0f}x worse. That "
+            f"adapter had already collapsed before any unlearning was applied (it also extracts "
+            f"fewer canaries than the ensemble, which a model trained on the same data should not), "
+            f"so 'the canaries are gone' after NPO or gradient difference says nothing about "
+            f"unlearning: there was nothing coherent left to unlearn from. The rows are printed "
+            f"because the run measured them, and are marked here rather than quietly dropped. "
+            f"M0 and M3 are unaffected — they act on the shard ensemble.",
+        ]
     if u.get("grid"):
         lines += [
             "",
