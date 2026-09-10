@@ -15,6 +15,7 @@ RESULTS.md. Adapters are left under bench/_work/unlearn/ for bench/demo.py.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -50,8 +51,10 @@ from tombstone.train.finetune import (
 )
 from tombstone.train.mia import membership_inference, perplexity
 from tombstone.train.unlearn import UnlearnConfig, approximate_unlearn, exact_unlearn, relearn
+from tombstone.util import secure_write
 
 SEED = 20260908
+BENCH_PEPPER = hashlib.sha256(b"tombstone-benchmark-pepper-v1").digest()  # fixed, see prepare()
 MODEL = "Qwen/Qwen2.5-0.5B"
 
 
@@ -66,6 +69,14 @@ def prepare(
     dataset with lineage; returns runtime, dataset store, canaries, holdout texts."""
     reset_dir(root)
     run_init(root)
+    # `init` writes a fresh random pepper, and examples are assigned to shards by a hash of the
+    # *peppered* subject id — so every run of this command reshuffled which subjects share a
+    # shard, and the numbers moved with it: two runs of the identical command gave 18/20 and
+    # 15/20 canaries memorised, 92/120 and 84/120 through the ensemble. A benchmark whose
+    # published numbers cannot be reproduced by its own published command is not much of a
+    # benchmark, so the harness pins the pepper. The tool itself keeps its random per-install
+    # pepper, which is what makes subject ids unlinkable across installations.
+    secure_write(root / ".tombstone" / "pepper", BENCH_PEPPER, 0o600)
     cfg = write_config(
         root,
         ["faiss"],
