@@ -66,6 +66,14 @@ def residue_section(r: dict[str, Any]) -> list[str]:
             f"{c['wall_s_mean']:.2f}s | {_pct(c['recall_at_5_before'])} → {_pct(c['recall_at_5_after'])} |"
         )
     lines.append("")
+    powers = [c["probe_power_rate"] for c in r["cells"] if c.get("probe_power_rate") is not None]
+    if powers:
+        lines.append(
+            f"Probe power: {_pct(min(powers))}–{_pct(max(powers))} of the vectors in each cell had a "
+            "findable byte pattern *before* the erasure. A residue of 0% only means something for the "
+            "share the scan could have seen; the remainder is UNVERIFIED(physical), not clean."
+        )
+        lines.append("")
     lines.append(f"Inversion (Vec2Text): {r.get('inversion', 'not run')}.")
     inv = _load("inversion")
     if inv:
