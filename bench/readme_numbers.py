@@ -26,6 +26,12 @@ def _load(kind: str) -> dict[str, Any] | None:
     return json.loads(p.read_text()) if p.is_file() else None
 
 
+def _rng(values: list[float]) -> str:
+    """A measured range: one number when both ends agree, never a mean across backends."""
+    lo, hi = min(values), max(values)
+    return _pct(lo) if abs(hi - lo) < 1e-9 else f"{_pct(lo)}-{_pct(hi)}"
+
+
 def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{100 * x:.1f}%"
 
@@ -36,21 +42,25 @@ def headline_block() -> str:
     if r:
         b0 = [c for c in r["cells"] if c["baseline"] == "B0"]
         checked = [c for c in b0 if c["physical_checked"]]
-        rate = (
-            sum(c["physical_residue_rate"] for c in checked) / max(1, len(checked))
-            if checked
-            else None
-        )
+        # A mean across four different backends is not a measurement of anything — it implies one
+        # population where there are four — and it traces to no result file, which is what the
+        # README-numbers check is for. Quote the measured range and let each backend speak.
+        rates = [c["physical_residue_rate"] for c in checked]
         per = ", ".join(f"{c['backend']} {_pct(c['physical_residue_rate'])}" for c in checked)
         b4 = [c for c in r["cells"] if c["baseline"] == "B4" and c["physical_checked"]]
-        rate4 = sum(c["physical_residue_rate"] for c in b4) / max(1, len(b4)) if b4 else None
-        own4 = sum(c.get("own_record_rate") or 0.0 for c in b4) / max(1, len(b4)) if b4 else None
+        own4 = [c.get("own_record_rate") or 0.0 for c in b4]
+        res4 = [c["physical_residue_rate"] for c in b4]
+        dup4 = [c.get("attributed_to_live_duplicate_rate") or 0.0 for c in b4]
+        excl = [c["logical_exclusion_rate"] for c in b0]
         lines.append(
-            f"1. **After a native `delete()`, {_pct(rate)} of a subject's vectors are still physically recoverable** "
-            f"from the index files across the checked backends ({per}; {r['corpus']['subjects']} subjects each), "
-            f"while every one of them is logically gone ({_pct(sum(c['logical_exclusion_rate'] for c in b0) / len(b0))} exclusion). "
-            f"After `tombstone erase`, {_pct(own4)} of the subjects' own records remain and {_pct(rate4)} of vectors still have "
-            "byte-identical copies in the files, all belonging to other subjects' boilerplate and reported UNVERIFIED(duplicate content), never VERIFIED. "
+            f"1. **After a native `delete()`, {_rng(rates)} of a subject's vectors are still "
+            f"physically recoverable** from the index files, depending on the backend "
+            f"({per}; {r['corpus']['subjects']} subjects each) — while every one of them is logically gone "
+            f"({_rng(excl)} exclusion). After `tombstone erase`, "
+            f"{_rng(own4)} of the subjects' own records remain and {_rng(res4)} of their vectors have bytes "
+            f"still attributable to them. A further {_rng(dup4)} have bytes that are byte-identical to "
+            "records belonging to *other* subjects (shared boilerplate); a byte scan cannot tell those two copies apart, so "
+            "they are reported separately and never counted as the erased record's residue. "
             "Source: `bench/results/residue-latest.json`, command `uv run python bench/residue/run_residue.py --all`."
         )
     if u:
@@ -69,10 +79,25 @@ def headline_block() -> str:
             for k, label in (("M1", "NPO"), ("M2", "gradient difference")):
                 if k in m:
                     parts.append(f"{label}: {fmt(m[k])}")
+            # The approximate methods act on the unsharded adapter. If that adapter was already
+            # broken, their numbers are not results, and the README must say so where the numbers
+            # are — not only in RESULTS.md.
+            flat = m.get("M0-unsharded", {}).get("holdout_ppl")
+            base = m["M0"].get("holdout_ppl")
+            caveat = ""
+            if flat and base and flat > 20.0 * base:
+                caveat = (
+                    f" NPO and gradient difference are applied to the unsharded adapter, whose held-out "
+                    f"perplexity is {flat:.0f} against {base:.1f} for the shard ensemble: that model had "
+                    f"already collapsed before any unlearning ran, so those two rows measure damage to a "
+                    f"broken model and not forgetting. They are shown because they were measured, and are "
+                    f"not a claim about NPO or gradient difference. The exact-retrain row is unaffected."
+                )
             lines.append(
                 f"2. **Exact shard unlearning vs approximate** on `{u['model']}` ({u['subjects']} subjects): before, {fmt(m['M0'])}; "
                 + "; ".join(parts)
                 + ". Source: `bench/results/unlearn-latest.json`, command `uv run python bench/unlearn/run_unlearn.py --all`."
+                + caveat
             )
     if a:
         s75 = next((s for s in a["strategies"] if s["id"] == "7.5"), None)

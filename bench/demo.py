@@ -60,6 +60,14 @@ def cli(args: list[str], cwd: Path) -> tuple[int, str]:
     ).rstrip()
 
 
+def _with_rate(facts: dict[str, Any]) -> dict[str, Any]:
+    """Add the recoverable fraction: a rate has enough significant digits to be traceable back
+    to this file, where the two small counts it comes from do not."""
+    n = float(facts.get("artifacts") or 0)
+    facts["recoverable_rate"] = (float(facts.get("recoverable") or 0) / n) if n else 0.0
+    return facts
+
+
 def cli_facts(args: list[str], cwd: Path) -> dict[str, Any]:
     """The same command again with ``--json``, for the numbers docs/demo.md quotes.
 
@@ -233,17 +241,19 @@ def main(argv: list[str] | None = None) -> int:
         ],
         root,
     )
-    facts["demo1"] = cli_facts(
-        [
-            "verify",
-            "--config",
-            str(h["cfg"]),
-            "--subject",
-            subject,
-            "--after-native-delete",
-            "--no-store-scan",
-        ],
-        root,
+    facts["demo1"] = _with_rate(
+        cli_facts(
+            [
+                "verify",
+                "--config",
+                str(h["cfg"]),
+                "--subject",
+                subject,
+                "--after-native-delete",
+                "--no-store-scan",
+            ],
+            root,
+        )
     )
     out += [
         "## Demo 1 — `delete()` is a lie",
@@ -255,6 +265,13 @@ def main(argv: list[str] | None = None) -> int:
         text,
         f"exit {code}",
         "```",
+        "",
+        # State the result rather than leaving the reader to count rows in a transcript. The rate
+        # is also what makes this doc traceable: a bare "21 of 23" is two short integers that
+        # collide with any result file by accident, so the fraction is recorded alongside it.
+        f"**{facts['demo1']['recoverable']} of {facts['demo1']['artifacts']} artifacts "
+        f"({facts['demo1']['recoverable_rate'] * 100:.1f}%) are still recoverable** after the app's own "
+        "`delete()` returned success.",
         "",
     ]
     # ---- Demo 2 --------------------------------------------------------------------------------
