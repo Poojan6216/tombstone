@@ -8,8 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.1.0] - 2026-09-09
 
-First release. Built end to end from `BUILD_SPEC.md`; the progress log there records every
-decision and blocker.
+First release. Built end to end against a written specification, with every measured number
+generated from a committed command into `RESULTS.md`.
 
 ### Added
 - Lineage capture: `stamp()` for dicts, LangChain `Document`s and lists; capture hooks for

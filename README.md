@@ -218,7 +218,9 @@ No LLM in the decision or verification path. Never claim a level you did not ach
 come from lineage, never from similarity. Fail loud on missing lineage. Suppression before
 reclaim. Resumable saga, never partial success. Never log raw personal data. Scope isolation.
 Determinism and replay. Never delete what you did not trace. No telemetry, no hosted components,
-no accounts. Never report a number you did not measure. Each has a test; see `BUILD_SPEC.md`.
+no accounts. Never report a number you did not measure. Each one is enforced by a test in
+`tests/` — see `tests/test_repo_checks.py`, `tests/test_secrets.py`, `tests/test_erase.py` and
+`tests/test_verify.py`.
 
 ## License
 

@@ -26,3 +26,6 @@ bench/corpus/_cache/
 .DS_Store
 .idea/
 .vscode/
+
+# the build specification and progress log are working notes, not part of the release
+BUILD_SPEC.md

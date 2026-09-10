@@ -55,7 +55,7 @@ def check_banned_words(paths: list[str]) -> list[str]:
         except UnicodeDecodeError:
             continue
         for i, line in enumerate(text.splitlines(), 1):
-            if _ALLOW_MARK in line or f.name in {"_checks.py", "BUILD_SPEC.md"}:
+            if _ALLOW_MARK in line or f.name == "_checks.py":
                 continue
             low = line.lower()
             for word in BANNED:
