@@ -178,8 +178,15 @@
    "seconds": 14046.2,
    "subjects": 200,
    "when": "20260910T090704"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-shards",
+   "seconds": 3772.7,
+   "shards": 16,
+   "when": "20260910T105322"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 27.355
+ "total_cpu_hours": 28.403
 }

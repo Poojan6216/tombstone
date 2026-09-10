@@ -51,12 +51,25 @@ def residue_by_layer(r: dict[str, Any], out: Path) -> None:
     x = range(len(backends))
     ax.bar([i - 0.2 for i in x], b0, width=0.4, label="B0 native delete()", color="#c44e52")
     ax.bar([i + 0.2 for i in x], b4, width=0.4, label="B4 Tombstone", color="#4c72b0")
+    # A zero bar has no height, and an absent bar and a measured zero look identical — which is
+    # exactly the number this chart exists to show. Label every bar with its value.
+    for i, (v0, v4) in enumerate(zip(b0, b4, strict=True)):
+        for xpos, v in ((i - 0.2, v0), (i + 0.2, v4)):
+            ax.annotate(
+                f"{v * 100:.1f}%",
+                (xpos, v),
+                textcoords="offset points",
+                xytext=(0, 3),
+                ha="center",
+                fontsize=8,
+            )
     ax.set_xticks(list(x))
     ax.set_xticklabels(backends)
-    ax.set_ylim(0, 1.05)
+    ax.set_ylim(0, 1.15)
     ax.set_ylabel("physical residue rate")
-    ax.set_title("vector bytes still findable after erasure")
-    ax.legend(loc="upper right")
+    ax.set_title("vector bytes still findable after erasure", pad=26)
+    # outside the axes: at upper right it sat on top of qdrant's 100% label
+    ax.legend(loc="lower center", bbox_to_anchor=(0.5, 1.0), ncol=2, fontsize=8, frameon=False)
     fig.tight_layout()
     fig.savefig(out / "residue-by-layer.png", metadata=META)
     plt.close(fig)
