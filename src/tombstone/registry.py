@@ -20,6 +20,12 @@ from tombstone.stores.base import ErasableStore
 _SHARED: dict[str, Runtime] = {}
 
 
+# Backends whose store is a local file or folder that a second client cannot open alongside
+# the first. A semantic cache backed by one of these needs its own path, not just its own
+# collection.
+_OWN_PATH_BACKENDS = frozenset({"faiss", "qdrant"})
+
+
 def _abs(base: Path, p: str | None) -> Path:
     assert p is not None
     path = Path(p)
@@ -217,13 +223,17 @@ class Runtime:
                 "table": f"{backing_cfg.table or 'documents'}_{suffix}"
                 if backing_cfg.table
                 else None,
+                # A separate collection is enough for a server, but a local file store cannot be
+                # opened twice: Qdrant's local mode takes an exclusive lock on its storage folder
+                # and the second client raises "already accessed by another instance". So every
+                # local file backend gets the cache its own path, as FAISS already did.
                 "path": (
                     str(
                         _abs(self.root, backing_cfg.path).with_name(
                             _abs(self.root, backing_cfg.path).name + f"-{suffix}"
                         )
                     )
-                    if backing_cfg.kind == "faiss" and backing_cfg.path
+                    if backing_cfg.kind in _OWN_PATH_BACKENDS and backing_cfg.path
                     else backing_cfg.path
                 ),
             }

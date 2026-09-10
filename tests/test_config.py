@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from tombstone.commands.init import run_init
 from tombstone.config import (
     CONFIG_SCHEMA_VERSION,
     ConfigError,
@@ -12,6 +13,7 @@ from tombstone.config import (
     parse_config,
     resolve_env,
 )
+from tombstone.registry import Runtime
 
 GOOD = """\
 version: 1
@@ -208,3 +210,43 @@ def test_store_lookup() -> None:
     assert cfg.store("ft-dataset").kind == "dataset"
     with pytest.raises(ConfigError, match="no store named"):
         cfg.store("missing")
+
+
+@pytest.mark.parametrize("backend", ["qdrant", "faiss", "chroma"])
+def test_all_stores_opens_a_semantic_cache_beside_its_backing_index(
+    backend: str, tmp_path: Path
+) -> None:
+    """``all_stores()`` must be able to open every configured store at once.
+
+    A semantic cache backed by a vector index gets its own derived store, and for a local file
+    backend that store cannot share the backing index's path: Qdrant's local mode takes an
+    exclusive lock on its storage folder, so the second client raises "already accessed by
+    another instance of Qdrant client". Only the saga path calls ``all_stores()`` (through the
+    pin check), so this surfaced two backends into a benchmark rather than at the first test.
+    """
+    from tests import _stores
+
+    _stores.skip_unless(backend)
+    root = tmp_path / "proj"
+    root.mkdir()
+    run_init(root)
+    cfg_path = root / "tombstone.yaml"
+    kb = {
+        "qdrant": '{ name: "kb", kind: qdrant, path: ./qd, collection: kb-v1, embedding: hash-embed-64 }',
+        "faiss": '{ name: "kb", kind: faiss, path: ./kb.index, embedding: hash-embed-64 }',
+        "chroma": '{ name: "kb", kind: chroma, path: ./chroma, collection: kb-v1, embedding: hash-embed-64 }',
+    }[backend]
+    cfg_path.write_text(
+        cfg_path.read_text().replace(
+            "stores:\n",
+            f"stores:\n  - {kb}\n"
+            '  - { name: "cache", kind: cache_semantic, backing: "kb" }\n',
+        )
+    )
+    rt = Runtime.load(cfg_path)
+    try:
+        stores = rt.all_stores()  # the call the saga makes before it does anything
+        assert {"kb", "cache"} <= set(stores)
+        assert rt.all_stores() is not None, "must be repeatable"
+    finally:
+        rt.close()
