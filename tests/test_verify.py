@@ -229,3 +229,106 @@ def test_independent_verifier_catches_reinserted_vector(
     forged.write_text(json.dumps(blob))
     res3 = verify_receipt_independently(forged, pub, None, cfg)
     assert not res3["ok"] and "INVALID" in res3["text"]
+
+
+@pytest.mark.parametrize("backend", ["chroma", "faiss", "qdrant", "pgvector"])
+def test_survivor_with_identical_content_is_not_the_deleted_record_s_residue(
+    backend: str, tmp_path: Path, pepper: bytes, request: pytest.FixtureRequest
+) -> None:
+    """6.3: two subjects hold byte-identical text, so their vectors share a fingerprint. Erase and
+    reclaim one; the survivor's bytes are still on disk and the byte-scan still matches them.
+
+    Those bytes are the survivor's. The shipped verifier says so, and the residue benchmark must
+    reach the same verdict on the same bytes — the bench used to call this residue because the
+    deleted record's pattern count "did not drop below its baseline", which is what a rebuild does
+    to a surviving duplicate, and the published matrix then disagreed with ``tombstone verify``.
+    """
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+    from residue.run_residue import physical_after, physical_baseline
+    from tombstone.verify.independent import _physical_observation
+
+    _stores.skip_unless(backend)
+    dsn = request.getfixturevalue("pg_database") if backend == "pgvector" else None
+    store = _stores.make_backend(backend, tmp_path, pg_dsn=dsn)
+    if "physical" not in {c.value for c in store.capabilities}:
+        pytest.skip(f"{backend} has no physical level here")
+    emb = _stores.embedder()
+    docs = _stores.stamped_docs(pepper, n_subjects=2, per_subject=1)[:2]
+    shared = "The agent noted that a satisfaction survey was sent after the call."
+    texts = [shared, shared]  # identical text => identical vector => identical fingerprint
+    with _stores.lineage_and_capture(tmp_path) as (_lineage, capture):
+        recs = capture.prepare_embeds(
+            store.name,
+            emb.name,
+            ["dup-a", "dup-b"],
+            emb.embed(texts),
+            [m for _, m in docs],
+            texts,
+            emb.embed,
+        )
+        store.add(recs)
+        a = recs[0].embed_node.ref()
+        b = recs[1].embed_node.ref()
+        assert a.embedding_fingerprint == b.embedding_fingerprint, (
+            "fixture must share a fingerprint"
+        )
+        base = physical_baseline(store, [a])
+        store.reclaim([a])  # a is gone; b survives with the same bytes
+
+        assert store.live_content_duplicates(a) > 0, "the survivor must still hold those bytes"
+        present, why = _physical_observation(store, a)
+        assert present is False and "live record" in why, why
+        pa = physical_after(store, [a], base)
+        assert pa is not None
+        assert pa["physical_residue"] == 0.0, "bench must agree with the verifier"
+        assert pa["attributed_to_live_duplicate"] == 1.0
+        assert pa["probe_power"] == 1.0, "the probe must have been able to see it before"
+        # and the survivor itself is untouched
+        assert store.get(["dup-b"]).get("dup-b") is not None
+    store.close()
+
+
+@pytest.mark.parametrize("backend", ["chroma", "faiss", "qdrant", "pgvector"])
+def test_batch_probe_sees_the_same_bytes_as_the_single_probe(
+    backend: str, tmp_path: Path, pepper: bytes, request: pytest.FixtureRequest
+) -> None:
+    """The batched physical probe and the single-ref one must agree, artifact for artifact.
+
+    pgvector reads its files back through ``pg_read_binary_file`` and so reports no
+    ``persisted_files()`` of its own; it inherited a batch probe that walks exactly that empty
+    list, and every batched probe silently found nothing. The residue benchmark probes in batches.
+    """
+    _stores.skip_unless(backend)
+    dsn = request.getfixturevalue("pg_database") if backend == "pgvector" else None
+    store = _stores.make_backend(backend, tmp_path, pg_dsn=dsn)
+    if "physical" not in {c.value for c in store.capabilities}:
+        pytest.skip(f"{backend} has no physical level here")
+    emb = _stores.embedder()
+    docs = _stores.stamped_docs(pepper, n_subjects=3, per_subject=1)[:6]
+    with _stores.lineage_and_capture(tmp_path) as (_lineage, _capture0):
+        texts = [x for x, _ in docs]
+        recs = _capture0.prepare_embeds(
+            store.name,
+            emb.name,
+            [f"bk{i}" for i in range(len(docs))],
+            emb.embed(texts),
+            [m for _, m in docs],
+            texts,
+            emb.embed,
+        )
+        store.add(recs)
+        refs = [r.embed_node.ref() for r in recs]
+        batch = store.probe_physical_batch(refs)
+        assert any(v.found for v in batch.values()), "batch probe found nothing while present"
+        for a in refs:
+            single = store.probe_physical(a)
+            b = batch[a.artifact_id]
+            assert b.found == single.found, (
+                f"{a.artifact_id}: batch {b.found} != single {single.found}"
+            )
+            for k in ("matches_artifact_id", "matches_f32le"):
+                if k in single.measurement:
+                    assert b.measurement.get(k) == single.measurement[k], k
+    store.close()

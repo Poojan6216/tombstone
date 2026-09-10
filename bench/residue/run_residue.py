@@ -15,6 +15,7 @@ Writes bench/results/residue-<timestamp>.json (+ residue-latest.json) and regene
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 import time
@@ -158,27 +159,58 @@ def physical_baseline(store: VectorBackendBase, refs: list[Any]) -> dict[str, fl
     return {aid: content for aid, (_ids, content) in _batch_hits(store, refs).items()}
 
 
+def _mean_of(rows: list[dict[str, Any]], key: str) -> float | None:
+    vals = [r[key] for r in rows if r.get(key) is not None]
+    return (sum(vals) / len(vals)) if vals else None
+
+
 def physical_after(
     store: VectorBackendBase, refs: list[Any], baseline: dict[str, float] | None
-) -> tuple[float | None, float | None]:
-    """(residue rate, own-record rate) after the erasure, attributing byte-identical copies of
-    other subjects the same way the saga does: residue iff the artifact's own record (id pattern)
-    is present, or its content-pattern count did not drop below the baseline."""
+) -> dict[str, float] | None:
+    """Physical attribution after the erasure, using the **same rule as the shipped verifier**
+    (``tombstone.verify.independent._physical``), so a bench cell and ``tombstone verify`` can
+    never disagree about the same bytes:
+
+      * the artifact's own record bytes (its id pattern) are present  → residue, unambiguously;
+      * content bytes present and no live record holds that fingerprint → residue;
+      * content bytes present but a live record has byte-identical content → *not* residue. The
+        bytes are the survivor's, and no byte-scan can attribute them to the deleted copy.
+
+    The pre-erasure ``baseline`` no longer decides the outcome. It used to ("residue iff the
+    content count did not drop below its baseline"), and that rule reports a survivor's bytes as
+    the deleted record's whenever a rebuild changes how many places a *surviving* duplicate is
+    stored — which is exactly what a delete-and-rebuild baseline does. The baseline is kept as the
+    probe-power check: a cell whose patterns were not findable *before* the erasure measured
+    nothing, and says so.
+
+    Only the ambiguous refs (content present, own record gone) pay for the O(n) live-duplicate
+    scan, so the common case costs nothing.
+    """
     from tombstone.model.status import VerifyLevel
 
     if VerifyLevel.PHYSICAL not in store.capabilities or baseline is None:
-        return None, None
+        return None
     hits = _batch_hits(store, refs)
-    residue = 0
-    own = 0
+    residue = own = attributed = powered = 0
     for a in refs:
         ids, content = hits[a.artifact_id]
-        before = baseline.get(a.artifact_id, 1.0)
+        if baseline.get(a.artifact_id, 0.0) > 0:
+            powered += 1
         if ids > 0:
             own += 1
-        if ids > 0 or (content > 0 and content >= before):
             residue += 1
-    return residue / max(1, len(refs)), own / max(1, len(refs))
+        elif content > 0:
+            if store.live_content_duplicates(a) > 0:
+                attributed += 1
+            else:
+                residue += 1
+    n = max(1, len(refs))
+    return {
+        "physical_residue": residue / n,
+        "own_record_present": own / n,
+        "attributed_to_live_duplicate": attributed / n,
+        "probe_power": powered / n,
+    }
 
 
 def run_cell(
@@ -240,13 +272,15 @@ def run_cell(
                 ]
         walls.append(tw.elapsed)
         lex = logical_exclusion(rt, store, refs)
-        phys, own = physical_after(store, refs, phys_base)
+        pa = physical_after(store, refs, phys_base)
         row = {
             "subject": subj,
             "embeds": len(refs),
             "logical_exclusion": lex,
-            "physical_residue": phys,
-            "own_record_present": own,
+            "physical_residue": pa["physical_residue"] if pa else None,
+            "own_record_present": pa["own_record_present"] if pa else None,
+            "attributed_to_live_duplicate": pa["attributed_to_live_duplicate"] if pa else None,
+            "probe_power": pa["probe_power"] if pa else None,
             "wall_s": round(tw.elapsed, 3),
             "method": method,
             "not_verified": not_verified,
@@ -275,6 +309,8 @@ def run_cell(
         )
         if any(r["own_record_present"] is not None for r in per_subject)
         else None,
+        "attributed_to_live_duplicate_rate": _mean_of(per_subject, "attributed_to_live_duplicate"),
+        "probe_power_rate": _mean_of(per_subject, "probe_power"),
         "physical_checked": bool(phys_vals),
         "wall_s_mean": sum(walls) / max(1, len(walls)),
         "wall_s_median": sorted(walls)[len(walls) // 2] if walls else None,

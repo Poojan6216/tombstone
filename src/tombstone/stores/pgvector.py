@@ -390,6 +390,73 @@ class PgVectorStore(VectorBackendBase):
             detail=f"{total} match(es)" if total else "no match in heap, toast or index",
         )
 
+    def probe_physical_batch(self, refs: Sequence[ArtifactRef]) -> dict[str, PhysicalProbeResult]:
+        """Batch probe reading each relation file once.
+
+        The base implementation walks ``persisted_files()``, which is empty here on purpose: a
+        Postgres server's files are read back through ``pg_read_binary_file``, not off our own
+        disk. Inheriting it made every batched probe scan nothing and report zero matches, so the
+        residue benchmark — which probes in batches — would have reported that pgvector leaves no
+        residue under *any* baseline, suppress-only included, where the bytes are certainly still
+        there. Overriding it keeps the batch path and the single-ref path on the same bytes.
+        """
+        if VerifyLevel.PHYSICAL not in self.capabilities:
+            raise NotSupported(
+                f"store {self.name!r} cannot be physically verified: {self.physical_unsupported_reason()}"
+            )
+        patterns: dict[str, dict[str, bytes]] = {}
+        for r in refs:
+            pats: dict[str, bytes] = {"artifact_id": r.artifact_id.encode("utf-8")}
+            if r.embedding_fingerprint:
+                pats["f32le"] = fingerprint_bytes(r.embedding_fingerprint)
+            patterns[r.artifact_id] = pats
+        if self.is_superuser:
+            self._conn.execute("CHECKPOINT")
+        counts: dict[str, dict[str, int]] = {
+            aid: dict.fromkeys(pats, 0) for aid, pats in patterns.items()
+        }
+        locations: dict[str, list[str]] = {aid: [] for aid in patterns}
+        sizes: dict[str, float] = {}
+        for label, spath in self._relation_files():
+            data = self._relation_bytes(spath)
+            sizes[f"bytes_{label}"] = float(len(data))
+            for aid, pats in patterns.items():
+                hit_names = []
+                for name, pat in pats.items():
+                    c = data.count(pat)
+                    if c:
+                        counts[aid][name] += c
+                        hit_names.append(name)
+                if hit_names:
+                    locations[aid].append(f"{label}:{'+'.join(hit_names)}")
+        method = "heap+index file scan via pg_read_binary_file (batched)"
+        dead: float | None = None
+        if self.pgstattuple:
+            dead = float(
+                _one(
+                    self._conn.execute(
+                        "SELECT dead_tuple_count FROM pgstattuple(%s)", (self.table,)
+                    )
+                )[0]
+            )
+            method = "pgstattuple + " + method
+        out: dict[str, PhysicalProbeResult] = {}
+        for aid, per in counts.items():
+            total = sum(per.values())
+            measurement: dict[str, float] = dict(sizes)
+            measurement.update({f"matches_{n}": float(c) for n, c in per.items()})
+            measurement["matches"] = float(total)
+            if dead is not None:
+                measurement["dead_tuples"] = dead
+            out[aid] = PhysicalProbeResult(
+                found=total > 0,
+                method=method,
+                locations=tuple(locations[aid]),
+                measurement=measurement,
+                detail=f"{total} match(es)" if total else "no match in heap, toast or index",
+            )
+        return out
+
     def persisted_scan_local(self, patterns: dict[str, bytes]) -> dict[str, int]:
         """For a co-located server: scan files directly (used by the backup experiment)."""
         out: dict[str, int] = {}

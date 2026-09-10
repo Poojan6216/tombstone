@@ -115,7 +115,7 @@ def test_shard_train_memorise_unlearn_measure(tmp_path: Path, pepper: bytes) -> 
     ds.suppress(trains)
     ds.reclaim(trains)
     t1 = time.time()
-    ex = exact_unlearn(ds, adapters, adapters / "serving", shard, cfg, log=print)
+    exact_unlearn(ds, adapters, adapters / "serving", shard, cfg, log=print)
     results["exact"] = {"wall_s": round(time.time() - t1, 1), "shard": shard}
     tok, serving2 = load_adapter_model(MODEL, adapters / "serving")
     h0, _, _ = canary_extraction_rate(tok, serving2, [target])

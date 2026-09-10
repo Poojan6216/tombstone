@@ -21,6 +21,7 @@ from tombstone.model.artifacts import ArtifactRef
 from tombstone.model.status import VerifyLevel
 from tombstone.stores._vector import VectorBackendBase
 from tombstone.stores.base import Hit, ReclaimResult
+from tombstone.util import atomic_write_text
 
 _FAISS_LOCK = threading.RLock()
 
@@ -52,14 +53,17 @@ class FaissStore(VectorBackendBase):
         self._next_id = 1
         self._excluded: set[int] = set()
         if self.path.is_file():
-            self._index = faiss.read_index(str(self.path))
-            if self.meta_path.is_file():
-                blob = json.loads(self.meta_path.read_text(encoding="utf-8"))
-                self._meta = blob.get("records", {})
-                self._next_id = int(blob.get("next_id", 1))
-            if self.tomb_path.is_file():
-                self._excluded = set(json.loads(self.tomb_path.read_text(encoding="utf-8")))
-            self.dims = int(self._index.d)
+            # under the same lock _persist() holds: opening a store while another thread persists
+            # is exactly the race that used to surface as a JSONDecodeError on an empty read
+            with self._lock:
+                self._index = faiss.read_index(str(self.path))
+                if self.meta_path.is_file():
+                    blob = json.loads(self.meta_path.read_text(encoding="utf-8"))
+                    self._meta = blob.get("records", {})
+                    self._next_id = int(blob.get("next_id", 1))
+                if self.tomb_path.is_file():
+                    self._excluded = set(json.loads(self.tomb_path.read_text(encoding="utf-8")))
+                self.dims = int(self._index.d)
         else:
             if dims <= 0:
                 raise ValueError("dims is required to create a new FAISS index")
@@ -94,11 +98,14 @@ class FaissStore(VectorBackendBase):
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         self._faiss.write_index(self._index, str(tmp))
         os.replace(tmp, self.path)
-        self.meta_path.write_text(
+        # atomic: the index is renamed into place above, and these two must be too — a reader
+        # opening the store mid-write would otherwise parse a truncated file, and a crash here
+        # would drop the tombstone set and un-suppress everything it names.
+        atomic_write_text(
+            self.meta_path,
             json.dumps({"next_id": self._next_id, "records": self._meta}, sort_keys=True),
-            encoding="utf-8",
         )
-        self.tomb_path.write_text(json.dumps(sorted(self._excluded)), encoding="utf-8")
+        atomic_write_text(self.tomb_path, json.dumps(sorted(self._excluded)))
 
     def persisted_files(self) -> list[Path]:
         return [p for p in (self.path, self.meta_path, self.tomb_path) if p.is_file()]

@@ -106,5 +106,26 @@ def secure_write(path: str | os.PathLike[str], data: bytes, mode: int = 0o600) -
             os.unlink(tmp)
 
 
+def atomic_write_text(path: str | os.PathLike[str], text: str) -> None:
+    """Write ``text`` to ``path`` atomically: temp file, fsync, rename.
+
+    Durable state that a reader may open at any moment (a store's tombstone set, an adapter's
+    erasure state) must never be observed truncated. A plain ``write_text`` truncates first, so a
+    concurrent reader sees an empty file and a crash mid-write destroys the old contents — and for
+    a suppression marker, losing it silently un-suppresses erased records.
+    """
+    path = os.fspath(path)
+    tmp = f"{path}.tmp.{secrets.token_hex(4)}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
 def freeze_mapping(m: Mapping[str, Any] | None) -> dict[str, Any]:
     return dict(m) if m else {}

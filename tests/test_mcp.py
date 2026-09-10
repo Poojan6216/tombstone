@@ -255,7 +255,7 @@ def test_trace_verify_status_receipt_tools(tmp_path: Path, monkeypatch: pytest.M
             assert ver["artifacts"] == len(trace.artifacts) and ver["recoverable"] > 0
             st = _content_json(await session.call_tool("tombstone.status", {}))
             assert st["scope"] == "default"
-            _first, res, body = (
+            _first, _res, _body = (
                 await _erase_via(
                     session,
                     trace.trace_id,

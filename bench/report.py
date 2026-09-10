@@ -40,13 +40,14 @@ def residue_section(r: dict[str, Any]) -> list[str]:
         f"embeddings `{r['corpus']['embed_model']}` (pgvector: `{r['corpus']['embed_model_pgvector']}`). "
         "Logical exclusion = fraction of the subject's vectors no longer retrievable by id, filter, top-40 or MMR. "
         "Own record present = fraction whose own record (the artifact id in stored metadata) is still in the files; "
-        "vector bytes findable = fraction whose vector bytes are still in the files, which includes byte-identical copies "
-        "belonging to other subjects (boilerplate) that a scan cannot attribute — those are reported UNVERIFIED(duplicate content), never VERIFIED. "
+        "vector bytes findable = fraction whose vector bytes are still in the files **and no surviving record holds those same bytes**. "
+        "Attributed to a survivor = fraction whose bytes are still findable but are byte-identical to a record that was not erased (shared boilerplate): a byte-scan cannot tell those two copies apart, so they are not counted as the erased record's residue — "
+        "the same call the shipped verifier makes on the same bytes (`tombstone.verify.independent`). "
         "Recall@5 = survivors' retrieval quality on a held-out query set before → after all erasures. "
         "Both columns appear or neither does.",
         "",
-        "| backend | baseline | logical exclusion | own record present | vector bytes findable | wall/erasure | Recall@5 before → after |",
-        "|---|---|---|---|---|---|---|",
+        "| backend | baseline | logical exclusion | own record present | vector bytes findable | attributed to a survivor | wall/erasure | Recall@5 before → after |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for c in r["cells"]:
         phys = (
@@ -55,8 +56,13 @@ def residue_section(r: dict[str, Any]) -> list[str]:
             else "UNVERIFIED (no physical access)"
         )
         own = _pct(c.get("own_record_rate")) if c["physical_checked"] else "UNVERIFIED"
+        dup = (
+            _pct(c.get("attributed_to_live_duplicate_rate"))
+            if c["physical_checked"] and c.get("attributed_to_live_duplicate_rate") is not None
+            else "—"
+        )
         lines.append(
-            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {own} | {phys} | "
+            f"| {c['backend']} | {c['baseline']} {c['label']} | {_pct(c['logical_exclusion_rate'])} | {own} | {phys} | {dup} | "
             f"{c['wall_s_mean']:.2f}s | {_pct(c['recall_at_5_before'])} → {_pct(c['recall_at_5_after'])} |"
         )
     lines.append("")

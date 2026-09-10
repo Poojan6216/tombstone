@@ -48,7 +48,7 @@ from tombstone.train.dataset import DatasetStore
 from tombstone.train.finetune import TrainConfig, adapter_hash
 from tombstone.train.ops import ModelOps, prompts_from_texts, read_texts_jsonl
 from tombstone.train.unlearn import UnlearnConfig
-from tombstone.util import derived_ulid, sha256_hex
+from tombstone.util import atomic_write_text, derived_ulid, sha256_hex
 
 STATE = "tombstone-state.json"
 
@@ -113,7 +113,8 @@ class AdapterStore:
 
     def _write_state(self, st: dict[str, Any]) -> None:
         self.path.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(json.dumps(st, indent=1, sort_keys=True), encoding="utf-8")
+        # durable erasure state: never leave it truncated behind a crash or a concurrent reader
+        atomic_write_text(self.state_path, json.dumps(st, indent=1, sort_keys=True))
 
     def shard_dirs(self) -> list[Path]:
         return sorted(p for p in self.path.glob("shard-*") if (p / "adapter_config.json").is_file())

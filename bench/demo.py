@@ -182,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
 
     t, _ = run_trace(rt, subject, with_store_gaps=False)
     embeds = [a for a in t.artifacts if a.kind is ArtifactKind.EMBED]
-    for b, store in h["stores"].items():
+    for _b, store in h["stores"].items():
         store.native_delete([a.store_key for a in embeds if a.store == store.name])
         rt.capture().record_native_delete(
             store.name, [a.store_key for a in embeds if a.store == store.name]

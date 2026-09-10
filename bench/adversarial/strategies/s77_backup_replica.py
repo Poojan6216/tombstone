@@ -108,7 +108,7 @@ def _pg_dump_case(dsn: str, docs: Any, subjects: list[str]) -> dict[str, Any]:
         psycopg.connect(restore_db, autocommit=True) as rc,
         psycopg.connect(live_dsn, autocommit=True) as lc,
     ):
-        for s, keys in keys_by_subject.items():
+        for _s, keys in keys_by_subject.items():
             n_restored = rc.execute(
                 "SELECT count(*) FROM documents WHERE id = ANY(%s)", (keys,)
             ).fetchone()[0]

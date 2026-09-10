@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import random
 import threading
+import traceback
 from pathlib import Path
 
 import pytest
@@ -44,7 +45,8 @@ def test_twenty_concurrent_sagas_valid_chain_or_clean_failure(
         except (LockTimeout, SagaError) as e:
             res = f"clean:{type(e).__name__}"
         except Exception as e:  # noqa: BLE001
-            res = f"UNCLEAN:{type(e).__name__}:{e}"
+            # keep the traceback: an UNCLEAN outcome is a race, and the frame is the whole clue
+            res = f"UNCLEAN:{type(e).__name__}:{e}\n{traceback.format_exc()}"
         with lock:
             outcomes.append(res)
 
