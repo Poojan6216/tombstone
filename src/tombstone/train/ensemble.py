@@ -11,8 +11,11 @@ retraining it without a subject is exact unlearning at one shard's cost. Shards 
 the likelihood they assign to the context (a posterior over experts), not by per-token
 confidence — see the comment in ``_mixture`` for the measurement that ruled that out.
 
-Cost: one forward pass per active shard per token (KV caches kept per shard). Utility on
-unrelated text is the gated distribution's perplexity.
+Cost: one forward pass per active shard per token, with a KV cache per shard so each step
+costs one position rather than the whole sequence again (measured 2.1x on the benchmark's own
+prompts; see ``generate_greedy``). The shard weights come from the context's cumulative
+log-likelihood, which is a running sum, so it is accumulated across steps instead of recomputed.
+Utility on unrelated text is the gated distribution's perplexity.
 """
 
 from __future__ import annotations
@@ -129,6 +132,71 @@ class ShardEnsemble:
         return [float(x) for x in picked.tolist()]
 
     def generate_greedy(self, prefix: str, max_new_tokens: int = 16) -> str:
+        """Greedy decode under the gated mixture, one position per shard per step.
+
+        Equivalent to calling ``_gated_logprobs`` on the whole sequence at every step (see
+        ``generate_greedy_uncached``, kept as the reference the equivalence test checks against),
+        but that re-encodes the entire prefix for all N shards on every token. Measured on the
+        benchmark's own canary prompt (9-token prefix, 16 new tokens, 3 shards, CPU): 11.7s
+        cached against 24.1s uncached, so 2.1x. The position ratio alone would predict more; at
+        these prefix lengths the per-step cost is dominated by the N adapter switches and model
+        calls, which caching does not remove, so 2.1x is what it actually buys.
+
+        Two things make the incremental form exact. The mixture only ever reads its last
+        position here, so only the last row of each shard's log-probs is needed; and the shard
+        weights come from the context's *cumulative* log-likelihood, which is a running sum — after
+        a token is chosen, each shard's accumulator gains exactly the log-prob that shard assigned
+        to it, which is the value already computed to choose it.
+        """
+        torch = self.torch
+        enc = self.tok(prefix, return_tensors="pt").to(device())
+        ids, mask = enc["input_ids"], enc["attention_mask"]
+        eos = self.tok.eos_token_id
+
+        caches: list[Any] = []
+        loglik: list[Any] = []  # per shard, cumulative log-likelihood of the context
+        last: list[Any] = []  # per shard, log-probs for the next token
+        targets = ids[:, 1:]
+        with torch.no_grad():
+            for n in self.names:
+                self.pm.set_adapter(n)
+                o = self.pm(input_ids=ids, attention_mask=mask, use_cache=True)
+                lp = torch.log_softmax(o.logits.float(), dim=-1)
+                caches.append(o.past_key_values)
+                loglik.append(lp[:, :-1].gather(2, targets.unsqueeze(2)).squeeze(2).sum(dim=1))
+                last.append(lp[:, -1])
+
+        out: list[int] = []
+        for _ in range(max_new_tokens):
+            w = torch.log_softmax(torch.stack(loglik, dim=0), dim=0)  # [shards, batch]
+            mixed = torch.logsumexp(torch.stack(last, dim=0) + w[:, :, None], dim=0)
+            nxt = int(torch.argmax(mixed[0]).item())
+            if eos is not None and nxt == eos:
+                break
+            out.append(nxt)
+            if len(out) == max_new_tokens:
+                break
+            step = torch.tensor([[nxt]], device=ids.device)
+            mask = torch.cat([mask, torch.ones((1, 1), dtype=mask.dtype, device=mask.device)], 1)
+            with torch.no_grad():
+                for i, n in enumerate(self.names):
+                    loglik[i] = loglik[i] + last[i][:, nxt]
+                    self.pm.set_adapter(n)
+                    o = self.pm(
+                        input_ids=step,
+                        attention_mask=mask,
+                        past_key_values=caches[i],
+                        use_cache=True,
+                    )
+                    caches[i] = o.past_key_values
+                    last[i] = torch.log_softmax(o.logits.float(), dim=-1)[:, -1]
+        return str(self.tok.decode(out, skip_special_tokens=True))
+
+    def generate_greedy_uncached(self, prefix: str, max_new_tokens: int = 16) -> str:
+        """The straightforward form: re-score the whole sequence every step.
+
+        Kept only as the reference implementation that ``generate_greedy`` is tested against.
+        """
         torch = self.torch
         enc = self.tok(prefix, return_tensors="pt").to(device())
         ids = enc["input_ids"]
