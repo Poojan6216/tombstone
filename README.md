@@ -10,6 +10,12 @@ similarity: erasure is a reachability query over a lineage graph captured at ing
 claims a verification level it did not achieve, and a receipt with no `OUT_OF_SCOPE` entries
 does not exist.
 
+**Start with what beats it:** [Attacks that work against Tombstone](RESULTS.md#attacks-that-work-against-tombstone)
+— measured, with rates, including the layer nobody can erase.
+
+![The lineage graph: source, chunk, embed, cache, train, adapter and memory artifacts, and the
+four verification levels with what each proves and what it does not.](docs/lineage.svg)
+
 ## Demo 1 — what a native `delete()` reaches
 
 A RAG app over the benchmark corpus with two indexes, a semantic cache, a fine-tune dataset and a
