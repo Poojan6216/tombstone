@@ -124,6 +124,11 @@ def semantic_section(a: dict[str, Any]) -> list[str]:
     return lines
 
 
+def _on_shard_ensemble(method: str) -> bool:
+    """Rows measured on the shard ensemble rather than the unsharded adapter."""
+    return "exact" in method.lower()
+
+
 DEGENERATE_PPL_RATIO = 20.0  # a baseline this much worse than the ensemble is not a baseline
 
 
@@ -205,9 +210,22 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
             "|---|---|---|",
         ]
         for r in u["relearn"]:
+            flag = "" if _on_shard_ensemble(r["method"]) or not degenerate else " ⚠"
             lines.append(
-                f"| {r['method']} | {r['steps']} | {r['canary_extracted']}/{r['canary_total']} |"
+                f"| {r['method']}{flag} | {r['steps']} | "
+                f"{r['canary_extracted']}/{r['canary_total']} |"
             )
+        if degenerate and any(not _on_shard_ensemble(r["method"]) for r in u["relearn"]):
+            lines += [
+                "",
+                "⚠ These rows start from the collapsed unsharded adapter described above, and the "
+                "confound here is not the same one. Continued training on benign text partly "
+                "*repairs* a model that has been trained into gibberish, and a repaired model "
+                "reproduces what it memorised. So a canary reappearing cannot be separated from "
+                "the model merely becoming coherent again: it is not evidence that approximate "
+                "unlearning suppressed rather than removed. The exact row is unaffected — it "
+                "relearns from the shard ensemble, which was never degenerate.",
+            ]
     if u.get("composition"):
         c = u["composition"]
         lines += [
