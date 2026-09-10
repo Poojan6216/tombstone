@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -52,7 +53,7 @@ def cli(args: list[str], cwd: Path) -> tuple[int, str]:
         cwd=cwd,
         capture_output=True,
         text=True,
-        env={**__import__("os").environ, "TOMBSTONE_LOG_LEVEL": "error"},
+        env={**os.environ, "TOMBSTONE_LOG_LEVEL": "error"},
     )
     return p.returncode, (
         p.stdout + ("\n" + p.stderr if p.returncode not in (0, 2) else "")
@@ -65,12 +66,23 @@ def cli_facts(args: list[str], cwd: Path) -> dict[str, Any]:
     Only ever called on read-only commands (``verify``): re-running ``erase`` to collect its
     numbers would perform a second erasure and report on a state the transcript never showed.
     """
-    code, out = cli([*args, "--json"], cwd)
+    # stdout only: cli() folds stderr in on unexpected exit codes, and log noise would break the
+    # parse for a run nobody is watching
+    p = subprocess.run(
+        [sys.executable, "-m", "tombstone", *args, "--json"],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "TOMBSTONE_LOG_LEVEL": "error"},
+    )
     try:
-        data: dict[str, Any] = json.loads(out)
+        data: dict[str, Any] = json.loads(p.stdout)
     except ValueError as e:  # a demo that cannot show its own numbers is a broken demo
-        raise SystemExit(f"demo: {' '.join(args)} --json did not return JSON: {out[:200]}") from e
-    data["exit"] = code
+        raise SystemExit(
+            f"demo: {' '.join(args)} --json returned no JSON (exit {p.returncode}): "
+            f"{p.stdout[:200]!r} / {p.stderr[-200:]!r}"
+        ) from e
+    data["exit"] = p.returncode
     return data
 
 
