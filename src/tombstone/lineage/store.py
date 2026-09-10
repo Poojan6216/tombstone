@@ -137,11 +137,16 @@ class LineageStore:
         rows = list(rows)
         if not rows:
             return
-        if self.backend == "sqlite":
-            self._conn.executemany(self._d.q(sql), [tuple(r) for r in rows])
-        else:
-            with self._conn.cursor() as cur:
-                cur.executemany(self._d.q(sql), [tuple(r) for r in rows])
+        # Every caller today runs inside tx(), which already holds this RLock — but that is a
+        # convention, not a guarantee, and _exec() takes the lock for exactly this reason. An
+        # RLock re-entered by the same thread costs nothing, so take it here too rather than
+        # leave the next caller to remember.
+        with self._lock:
+            if self.backend == "sqlite":
+                self._conn.executemany(self._d.q(sql), [tuple(r) for r in rows])
+            else:
+                with self._conn.cursor() as cur:
+                    cur.executemany(self._d.q(sql), [tuple(r) for r in rows])
 
     @contextmanager
     def tx(self) -> Iterator[None]:
