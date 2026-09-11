@@ -68,6 +68,8 @@ Base model `Qwen/Qwen2.5-0.5B` on cpu; 16 shard adapters (SISA prediction ensemb
 | M2 gradient difference | 5/20 (25.0%) | 0.91 [0.76,1.00] | 0.86 [0.70,1.00] | 103.54 (-195.17) | 104s | steps=20 lr=5e-05 (grid-chosen); others' canaries 13/20 |
 | M4 full retrain (oracle) | 0/2 (0.0%) | 1.00 [1.00,1.00] | 0.75 [0.00,1.00] | 257111.41 (+256812.70) | 29464s | retrained once without 2 subject(s) (CPU-bounded); the unsharded reference is 'M0-unsharded' |
 
+> **An AUC below 0.5 is a leak, not a pass.** M1 Min-K% reads 0.17, so an attacker who inverts the test scores 0.83. The interval excludes chance in the *other* direction, which is still a distinguishable signal — the same reason the drift attacker in 7.5 is allowed to choose which side of the threshold means 'present'.
+
 > **M4 did not train to a usable model in this run** — held-out perplexity above 20x the shard ensemble's 298.7. Whatever those rows show is the collapse, not the method, and they are not a result.
 
 ### Hyperparameter grid for approximate methods (full grid, not just the winner)

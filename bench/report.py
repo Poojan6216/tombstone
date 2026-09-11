@@ -161,6 +161,30 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
             f"{_f(mink.get('auc'), 2)} [{_f(mink.get('ci_low'), 2)},{_f(mink.get('ci_high'), 2)}] | "
             f"{_f(ppl, 2)}{delta} | {m.get('wall_s', 0):.0f}s | {m.get('note', '')} |"
         )
+    # An AUC below 0.5 is not a weak attack, it is a strong one pointing the other way: the
+    # attacker simply inverts the test and achieves 1 - AUC. Reporting 0.17 without saying so
+    # reads as "almost forgotten" when it means "identified 83% of the time".
+    inverted = []
+    for m in u["methods"]:
+        for name, key in (("loss", "loss"), ("Min-K%", "mink")):
+            a = m.get("mia", {}).get(key, {})
+            hi = a.get("ci_high")
+            if a.get("auc") is not None and hi is not None and hi < 0.5:
+                inverted.append((m["name"], name, a["auc"]))
+    if inverted:
+        lines += [
+            "",
+            "> **An AUC below 0.5 is a leak, not a pass.** "
+            + "; ".join(
+                f"{n} {k} reads {_f(a, 2)}, so an attacker who inverts the test scores "
+                f"{_f(1 - a, 2)}"
+                for n, k, a in inverted
+            )
+            + ". The interval excludes chance in the *other* direction, which is still a "
+            "distinguishable signal — the same reason the drift attacker in 7.5 is allowed to "
+            "choose which side of the threshold means 'present'.",
+        ]
+
     # M1, M2 and M4 all act on the unsharded adapter, so they are only interpretable if that
     # adapter was a usable model to begin with. Comparing the two baselines that the run already
     # measured says whether it was — no extra measurement, and it cannot be forgotten.
