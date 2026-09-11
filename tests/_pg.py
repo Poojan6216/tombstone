@@ -191,10 +191,14 @@ def acquire() -> PgHandle | None:
             handle._cleanup.append(lambda: shutil.rmtree(workdir, ignore_errors=True))
     if handle is None:
         return None
+    # A handle whose server never answers is worse than no handle: the fixture skips on None, but
+    # on a dead handle every pgvector test fails with a socket error instead. That is what a
+    # contributor without Postgres saw, and what made the mandatory CI jobs red.
     for _ in range(20):
         try:
             handle.has_vector, handle.has_pgstattuple, handle.version = _probe(handle.dsn)
-            break
+            return handle
         except Exception:  # noqa: BLE001
             time.sleep(0.5)
-    return handle
+    handle.stop()
+    return None
