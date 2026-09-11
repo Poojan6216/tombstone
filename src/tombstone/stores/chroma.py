@@ -9,9 +9,10 @@ into a fresh segment, drop the old one, purge the queue and VACUUM the SQLite fi
 from __future__ import annotations
 
 import contextlib
+import math
 import os
 import sqlite3
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
 
@@ -34,6 +35,15 @@ def _clean_md(md: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = str(v)
     return out
+
+
+def _content_matches(measurement: Mapping[str, float]) -> float:
+    """Vector-pattern matches only: the artifact-id pattern is counted separately."""
+    return sum(
+        float(v)
+        for k, v in measurement.items()
+        if k.startswith("matches_") and k not in {"matches_artifact_id", "matches_id"}
+    )
 
 
 class ChromaStore(VectorBackendBase):
@@ -227,14 +237,27 @@ class ChromaStore(VectorBackendBase):
             )
         # 3. purge the embeddings queue (Chroma's write-ahead log inside sqlite) and VACUUM
         purged = self._purge_sqlite()
-        # Chroma flushes segments from a background thread; an orphan segment directory of the
-        # old collection can reappear for a moment after delete_collection. Settle, then sweep.
+        # Chroma flushes segments from a background thread, so an orphan segment of the old
+        # collection can outlive delete_collection for a moment. This used to sleep a fixed second
+        # and hope: long enough on a quiet laptop, not on a loaded CI runner, where the sweep ran
+        # before the flush and left the bytes on disk. Sweep until the byte count stops falling
+        # instead of guessing how long that takes — fast when it settles immediately, patient when
+        # it does not, and bounded so a store that never settles still returns.
         import time
 
-        for _ in range(5):
+        deadline = time.monotonic() + 15.0
+        previous: float | None = None
+        while True:
             self._remove_orphan_segments()
+            current = math.fsum(
+                _content_matches(self.probe_physical(r).measurement)
+                for r in refs
+                if r.embedding_fingerprint
+            )
+            if current in (0, previous) or time.monotonic() >= deadline:
+                break
+            previous = current
             time.sleep(0.2)
-        self._remove_orphan_segments()
         return ReclaimResult(
             noop=False,
             method="compact + rewrite segment",

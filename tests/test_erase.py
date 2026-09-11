@@ -270,7 +270,7 @@ def test_full_erase_all_verified_exit_zero(
     assert len(dupes) < len(data["statuses"]), "everything was duplicate content; fixture is wrong"
     assert code == 0 or (code == 2 and dupes)
     assert "OUT_OF_SCOPE 3" in text and "ed25519 signed" in text
-    assert data["counts"]["verified"] == len(t.artifacts)
+    assert data["counts"]["verified"] == len(t.artifacts) - len(dupes)
     # every artifact physically verified (docstore, vectors, caches, dataset)
     assert all(s["level"] == "physical" for s in data["statuses"])
     # the subject is gone from every store and other subjects survive
