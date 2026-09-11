@@ -102,6 +102,13 @@ class HashChain:
     def read(self) -> list[Record]:
         if not self.path.is_file():
             return []
+        with file_lock(self.path, self.lock_timeout_s):
+            return self._read_unlocked()
+
+    def _read_unlocked(self) -> list[Record]:
+        """Caller must hold the file lock."""
+        if not self.path.is_file():
+            return []
         out: list[Record] = []
         with self.path.open("r", encoding="utf-8") as fh:
             for i, line in enumerate(fh):
@@ -122,7 +129,19 @@ class HashChain:
         return len(self.read())
 
     def _last(self) -> Record | None:
-        """The last record, read from the tail of the file (appends stay O(1))."""
+        """The last record, under the same lock ``append`` holds.
+
+        Readers must take the lock too. ``head()`` used to read the tail unlocked, so a reader
+        landing mid-append saw a half-written final line and raised a raw ``JSONDecodeError`` out
+        of ``json.loads`` — which surfaced as an unclean saga failure under twenty concurrent
+        erasures, reproducibly on Linux and rarely on macOS. ``flock`` is not re-entrant here, so
+        the locked and unlocked forms are kept separate and ``append`` uses the unlocked one.
+        """
+        with file_lock(self.path, self.lock_timeout_s):
+            return self._last_unlocked()
+
+    def _last_unlocked(self) -> Record | None:
+        """Caller must hold the file lock."""
         if not self.path.is_file():
             return None
         with self.path.open("rb") as fh:
@@ -146,7 +165,7 @@ class HashChain:
     def append(self, type_: str, body: dict[str, Any]) -> Record:
         """Append one record under the lock, fsync, return it."""
         with file_lock(self.path, self.lock_timeout_s):
-            last = self._last()
+            last = self._last_unlocked()
             seq = last.seq + 1 if last else 0
             prev = last.hash if last else GENESIS
             ts = utc_ms()
