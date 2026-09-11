@@ -173,6 +173,17 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
         and base_ppl > 0
         and flat_ppl > DEGENERATE_PPL_RATIO * base_ppl
     )
+    # Judge every row on its own perplexity too. Keying only off M0-unsharded assumes the
+    # approximate methods share one baseline, and M4 trains its own — so a collapsed oracle beside
+    # a healthy baseline would have been printed as a result.
+    collapsed = [
+        m["name"]
+        for m in u["methods"]
+        if base_ppl
+        and m.get("holdout_ppl")
+        and m["name"] != "M0-unsharded"
+        and m["holdout_ppl"] > DEGENERATE_PPL_RATIO * base_ppl
+    ]
     if degenerate:
         assert flat_ppl is not None and base_ppl is not None
         lines += [
@@ -186,6 +197,13 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
             f"unlearning: there was nothing coherent left to unlearn from. The rows are printed "
             f"because the run measured them, and are marked here rather than quietly dropped. "
             f"M0 and M3 are unaffected — they act on the shard ensemble.",
+        ]
+    if collapsed:
+        lines += [
+            "",
+            f"> **{', '.join(collapsed)} did not train to a usable model in this run** — held-out "
+            f"perplexity above {DEGENERATE_PPL_RATIO:.0f}x the shard ensemble's {_f(base_ppl, 1)}. "
+            f"Whatever those rows show is the collapse, not the method, and they are not a result.",
         ]
     if u.get("grid"):
         lines += [

@@ -542,7 +542,11 @@ def main(argv: list[str] | None = None) -> int:
     m4_subjects = measured[:2] if not ns.quick else measured[:1]
     t0 = time.time()
     ds4 = _dataset_without(root, ds, rt, m4_subjects, ns.shards)
-    train_unsharded(ds4, root / "oracle", cfg, log=None)
+    # flat_cfg, not cfg: the oracle is an unsharded adapter over the same data, so it needs the
+    # same reduced learning rate. Trained at the shards' rate it collapses exactly as the main
+    # unsharded adapter did, and the oracle is the reference the approximate methods are judged
+    # against — a broken reference is worse than none.
+    train_unsharded(ds4, root / "oracle", flat_cfg, log=None)
     wall4 = time.time() - t0
     res4 = measure(
         MODEL,
