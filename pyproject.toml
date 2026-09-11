@@ -21,6 +21,8 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: Database",
   "Topic :: Security",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Typing :: Typed",
 ]
 # Core imports nothing heavier than pydantic, cryptography, sqlite3 (stdlib), pyyaml.
 dependencies = [
@@ -51,8 +53,11 @@ all = ["tombstone-erase[pgvector,qdrant,chroma,faiss,langchain,train,mcp,bench]"
 tombstone = "tombstone.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/poojanpatel/tombstone"
-Changelog = "https://github.com/poojanpatel/tombstone/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/Poojan6216/tombstone"
+Repository = "https://github.com/Poojan6216/tombstone"
+Issues = "https://github.com/Poojan6216/tombstone/issues"
+Changelog = "https://github.com/Poojan6216/tombstone/blob/main/CHANGELOG.md"
+Results = "https://github.com/Poojan6216/tombstone/blob/main/RESULTS.md"
 
 [dependency-groups]
 dev = [

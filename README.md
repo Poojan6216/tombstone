@@ -104,12 +104,23 @@ verifier with no access to the lineage database.
 
 ## Install
 
+Not yet on PyPI. Until the 0.1.0 release is cut, install from source:
+
+```bash
+uv tool install git+https://github.com/Poojan6216/tombstone     # CLI: tombstone
+```
+
+After release the same thing is:
+
 ```bash
 uv tool install tombstone-erase            # CLI: tombstone
 uv pip install 'tombstone-erase[chroma,faiss,qdrant,pgvector,langchain]'   # store adapters
 uv pip install 'tombstone-erase[train]'    # the model leg (torch, transformers, peft)
 uv pip install 'tombstone-erase[mcp]'      # the MCP server
 ```
+
+The core install pulls only `pydantic`, `cryptography` and `pyyaml` — every backend, the training
+leg and the MCP server are extras, so `import tombstone` stays fast and drags in nothing heavy.
 
 Ten-minute path (scripted in `tests/test_first_use.py`):
 
@@ -134,6 +145,30 @@ tombstone verify --receipt .tombstone/receipts/<id>.json --public-key .tombstone
 tombstone replay                                  # re-derive every receipt from the journal
 tombstone mcp                                     # MCP server; erase requires an elicitation confirmation
 ```
+
+### Driving it from an AI assistant (MCP)
+
+`tombstone mcp` exposes five tools — `tombstone.trace`, `tombstone.verify`, `tombstone.erase`,
+`tombstone.receipt`, `tombstone.status` — over stdio or streamable HTTP. Point any MCP client at it:
+
+```json
+{
+  "mcpServers": {
+    "tombstone": {
+      "command": "tombstone",
+      "args": ["mcp", "--config", "/absolute/path/to/tombstone.yaml"]
+    }
+  }
+}
+```
+
+The assistant can then trace a subject, inspect a receipt, or ask for coverage — and **`erase`
+cannot execute without an explicit confirmation** carried in the request, on every protocol
+revision. An agent cannot talk its way into deleting your data.
+
+One thing this does not remove: Tombstone can only trace what it saw arrive. If the app was not
+wrapped at ingest, `trace` reports a lineage gap and refuses to claim an erasure it cannot back
+up — see [the attacks](RESULTS.md#attacks-that-work-against-tombstone), 7.1.
 
 ## Results
 
