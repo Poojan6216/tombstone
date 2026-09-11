@@ -192,13 +192,27 @@ def unlearn_section(u: dict[str, Any]) -> list[str]:
             "",
             "### Hyperparameter grid for approximate methods (full grid, not just the winner)",
             "",
-            "| method | steps | lr | canary extraction | held-out ppl | chosen |",
+            "| method | steps | lr | canary extraction (before → after) | held-out ppl | chosen |",
             "|---|---|---|---|---|---|",
         ]
         for g in u["grid"]:
-            lines.append(
-                f"| {g['method']} | {g['steps']} | {g['lr']} | {g['canary_extracted']}/{g['canary_total']} | {_f(g['holdout_ppl'], 2)} | {'yes' if g.get('chosen') else ''} |"
+            before = g.get("canary_before")
+            shown = (
+                f"{before}/{g['canary_total']} → {g['canary_extracted']}/{g['canary_total']}"
+                if before is not None
+                else f"{g['canary_extracted']}/{g['canary_total']}"
             )
+            lines.append(
+                f"| {g['method']} | {g['steps']} | {g['lr']} | {shown} | {_f(g['holdout_ppl'], 2)} | {'yes' if g.get('chosen') else ''} |"
+            )
+        if any(g.get("canary_before") is None for g in u["grid"]):
+            lines += [
+                "",
+                "This grid records only the count after unlearning. The unsharded adapter memorises "
+                "roughly half of its subjects, so a configuration that changed nothing scores the "
+                "same as one that worked, and these rows cannot be read as a ranking. Later runs "
+                "record the before-count alongside.",
+            ]
     if u.get("relearn"):
         lines += [
             "",

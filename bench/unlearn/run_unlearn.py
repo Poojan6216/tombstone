@@ -348,7 +348,8 @@ def main(argv: list[str] | None = None) -> int:
     flat = adapters / "unsharded"
     tok, fm = load_adapter_model(MODEL, flat)
     ppl_flat = perplexity(tok, fm, holdout[:60])
-    hf, nf, _ = canary_extraction_rate(tok, fm, [canaries[s] for s in measured])
+    hf, nf, flat_hits = canary_extraction_rate(tok, fm, [canaries[s] for s in measured])
+    flat_by_subject = {s: bool(h) for s, h in zip(measured, flat_hits, strict=True)}
     # Decision gate 3: do not measure forgetting on a model that never learned. M1/M2/M4 all act
     # on this adapter, so if it is already broken their numbers describe the damage, not the
     # method. Say so in the log and record it, rather than let the matrix imply otherwise.
@@ -364,6 +365,7 @@ def main(argv: list[str] | None = None) -> int:
             "name": "M0-unsharded",
             "label": "nothing (unsharded adapter)",
             "degenerate_baseline": flat_degenerate,
+            "canary_hits_by_subject": flat_by_subject,
             "method": "single adapter on all data",
             "canary_extracted": hf,
             "canary_total": nf,
@@ -380,6 +382,10 @@ def main(argv: list[str] | None = None) -> int:
         }
     )
     grid_subjects = measured[:4] if not ns.quick else measured[:2]
+    # How many of these four the model could recite *before* any unlearning. Without it "canary
+    # 0/4" after a grid point is uninterpretable: the unsharded adapter memorises roughly half its
+    # subjects, so a config that changed nothing scores 0/4 exactly like one that worked.
+    grid_before = sum(1 for s in grid_subjects if flat_by_subject.get(s))
     grid_space = [
         (steps, lr)
         for steps in ((20, 40, 80) if not ns.quick else (10,))
@@ -419,13 +425,17 @@ def main(argv: list[str] | None = None) -> int:
                 "lr": lr,
                 "canary_extracted": h,
                 "canary_total": n,
+                "canary_before": grid_before,
                 "holdout_ppl": ppl,
                 "wall_s": round(time.time() - t0, 1),
                 "chosen": False,
             }
             grid.append(row)
             _checkpoint(snapshot())
-            log(f"grid {method} steps={steps} lr={lr}: canary {h}/{n} ppl {ppl:.2f}")
+            log(
+                f"grid {method} steps={steps} lr={lr}: canary {h}/{n} "
+                f"(was {grid_before}/{n}) ppl {ppl:.2f}"
+            )
             ok_ppl = ppl <= ppl_flat * tol
             if ok_ppl and (best is None or h < best[0] or (h == best[0] and ppl < best[1])):
                 best = (h, ppl, steps, lr)
