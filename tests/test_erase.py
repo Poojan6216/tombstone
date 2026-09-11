@@ -429,9 +429,33 @@ def test_chaos_sigkill_resume_produces_identical_receipt(
                 for aid in sorted(set(ref_by_id) | set(got_by_id))
                 if ref_by_id.get(aid) != got_by_id.get(aid)
             ]
+
+            # For each artifact that moved, show the physical probe records both journals hold
+            # for it. Whether a baseline record exists on the resumed side, and what value of
+            # live_duplicates it carries, is the whole question — and only the journals can
+            # answer it. Three rounds of reasoning from the outcome alone all guessed wrong.
+            def probe_records(journal_dir: Path, aid: str) -> list[str]:
+                return [
+                    f"saga=…{r.body.get('saga_id', '')[-6:]} probe={r.body.get('probe')} "
+                    f"found={r.body.get('found')} m={r.body.get('measurement')}"
+                    for r in Journal(journal_dir / ".tombstone" / "journal.jsonl").records()
+                    if r.type == Journal.PROBE
+                    and r.body.get("artifact_id") == aid
+                    and r.body.get("level") == "physical"
+                ]
+
+            detail: list[str] = []
+            for line in diff[:3]:
+                aid = line.split(":")[0]
+                detail.append(f"  {aid} in the reference journal:")
+                detail += [f"    {x}" for x in probe_records(ref_dir, aid)] or ["    (none)"]
+                detail.append(f"  {aid} in the resumed journal (killed at {kp}):")
+                detail += [f"    {x}" for x in probe_records(d, aid)] or ["    (none)"]
             raise AssertionError(
                 f"kill point {kp}: receipt differs in {len(diff)} artifact(s):\n"
                 + "\n".join(diff[:10])
+                + "\n"
+                + "\n".join(detail)
             )
         j = Journal(d / ".tombstone" / "journal.jsonl")
         assert j.verify() > kp and not j.open_sagas()

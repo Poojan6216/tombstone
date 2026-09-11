@@ -549,6 +549,23 @@ class Saga:
                 erasing=[x.artifact_id for x in self.trace.artifacts],
             )
             if dupes <= 0:
+                # Record the zero explicitly rather than skipping. A missing baseline record
+                # and a recorded zero both decide the same way today, but they do not resume
+                # the same way: the first baseline record for an artifact wins on resume, so a
+                # recorded value is inherited from the killed attempt, while a missing one is
+                # recomputed later under whatever state the resumed run finds. No physical
+                # probe is needed — with the duplicate rule decided on the lineage graph alone,
+                # the byte count carried no decision weight, and the probe was the expensive
+                # half of this step.
+                self.journal.probe(
+                    self.saga_id,
+                    a.artifact_id,
+                    VerifyLevel.PHYSICAL.value,
+                    "baseline",
+                    False,
+                    {"live_duplicates": 0.0},
+                    detail="no other live artifact holds these bytes",
+                )
                 continue
             try:
                 pr = g.store.probe_physical(a)
