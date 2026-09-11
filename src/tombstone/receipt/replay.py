@@ -120,13 +120,14 @@ def facts_from_records(
                 if id_hits > 0:
                     f["physical_found"] = True
                 elif content_hits > 0 and extra.get("live_duplicates", 0.0) > 0:
-                    baseline = extra.get("baseline_content_matches")
-                    if baseline is not None and content_hits < baseline:
-                        f["physical_found"] = False
-                    else:
-                        f["physical_found"] = None
-                        f["physical_supported"] = False
-                        f["physical_reason"] = "duplicate content"
+                    # Must stay identical to the saga's rule in erase/saga.py: replay re-derives
+                    # every receipt and asserts equality, so the two are one rule with two
+                    # implementations, and a change to either alone shows up as 49 of 56 receipts
+                    # failing to reproduce. Decided on the lineage fact, never on byte counts —
+                    # see the saga for why counts made the outcome depend on timing.
+                    f["physical_found"] = None
+                    f["physical_supported"] = False
+                    f["physical_reason"] = "duplicate content"
                 elif content_hits > 0:
                     f["physical_found"] = True
                 else:

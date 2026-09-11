@@ -631,31 +631,32 @@ class Saga:
                         found = True
                         detail = f"{b['probe']}: this artifact's own record bytes present ({b['detail']})"
                     elif content_hits > 0 and extra.get("live_duplicates", 0.0) > 0:
-                        # Byte-identical content of other live artifacts is legitimately there.
-                        # Compare against what the *survivors* can account for, not against a
-                        # pre-reclaim byte count. `live_duplicates` is a fact about the lineage
-                        # graph and is identical on every attempt; the baseline is a measurement
-                        # whose moment differs between an uninterrupted run and a resumed one.
-                        baseline = extra.get("baseline_content_matches")
-                        per_copy = baseline / (extra["live_duplicates"] + 1.0) if baseline else 0.0
-                        explained_by_survivors = per_copy * extra["live_duplicates"]
-                        if per_copy > 0 and content_hits <= explained_by_survivors + 1e-9:
-                            found = False
-                            detail = (
-                                f"{b['probe']}: {int(content_hits)} content match(es) belong to "
-                                f"{int(extra['live_duplicates'])} other live artifact(s) with "
-                                f"identical bytes ({int(explained_by_survivors)} explained by "
-                                f"survivors; own copy gone)"
-                            )
-                        else:
-                            found = None
-                            f["physical_supported"] = False
-                            f["physical_reason"] = (
-                                f"duplicate content: {int(extra['live_duplicates'])} other live "
-                                "artifact(s) hold byte-identical content; this artifact's own "
-                                "record is absent but its content bytes cannot be attributed"
-                            )
-                            detail = f"{b['probe']}: content bytes shared with other live artifacts"
+                        # Other live artifacts hold byte-identical content, so a byte scan cannot
+                        # say whose copy it found, and this artifact's own record is already gone
+                        # (id_hits == 0 above). The outcome is decided by that fact about the
+                        # lineage graph alone — never by comparing byte counts before and after.
+                        #
+                        # Every count-based version of this rule was timing-sensitive. Chroma
+                        # flushes segments from a background thread, so the same probe returns
+                        # different numbers depending on when it runs, and a saga killed and
+                        # resumed measured at a different moment and reached a different verdict:
+                        # the same three artifacts flipped between VERIFIED and UNVERIFIED at
+                        # three separate kill points. A receipt that depends on when the machine
+                        # died is not a receipt (Hard Rule 9), and no amount of waiting makes a
+                        # measured count into a stable one on a machine you do not own.
+                        #
+                        # The cost is deliberate: shared boilerplate now reports UNVERIFIED rather
+                        # than VERIFIED. That is the honest answer — we cannot attribute those
+                        # bytes — and it is what the independent verifier already says about the
+                        # same artifacts.
+                        found = None
+                        f["physical_supported"] = False
+                        f["physical_reason"] = (
+                            f"duplicate content: {int(extra['live_duplicates'])} other live "
+                            "artifact(s) hold byte-identical content; this artifact's own "
+                            "record is absent but its content bytes cannot be attributed"
+                        )
+                        detail = f"{b['probe']}: content bytes shared with other live artifacts"
                     elif content_hits > 0:
                         found = True
                         detail = f"{b['probe']}: {b['detail']}"
