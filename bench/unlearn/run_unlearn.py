@@ -546,7 +546,10 @@ def main(argv: list[str] | None = None) -> int:
     # same reduced learning rate. Trained at the shards' rate it collapses exactly as the main
     # unsharded adapter did, and the oracle is the reference the approximate methods are judged
     # against — a broken reference is worse than none.
-    train_unsharded(ds4, root / "oracle", flat_cfg, log=None)
+    # log=None here meant the oracle trained in complete silence for an hour or more, and when
+    # swap pressure stretched that to eight, there was no way to tell progress from a hang without
+    # sampling the process. Same gap as the composition pass had.
+    train_unsharded(ds4, root / "oracle", flat_cfg, log=lambda m: log(f"M4 oracle {m}"))
     wall4 = time.time() - t0
     res4 = measure(
         MODEL,
