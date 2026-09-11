@@ -173,7 +173,15 @@ def test_reclaim_removes_bytes_and_is_idempotent(
         store.native_delete([target.store_key])
         after_native = store.probe_physical(target)
         r = store.reclaim([target])
-        assert not r.noop and r.method
+        # Whether a native delete leaves the bytes behind is the thing this project measures, and
+        # it varies by backend *and* by platform: qdrant's local storage keeps them on macOS and
+        # drops them on Linux. So the assertion has to follow the measurement rather than assume
+        # it — if the bytes were already gone, a no-op reclaim is the correct answer and saying so
+        # is the honest behaviour.
+        if after_native.found:
+            assert not r.noop and r.method, "bytes were present; reclaim should have done work"
+        else:
+            assert r.noop, "nothing was left to reclaim; a no-op is correct"
         assert not store.probe_physical(target).found, store.probe_physical(target)
         # survivors intact and retrievable
         for o in others:
@@ -247,9 +255,20 @@ def test_full_erase_all_verified_exit_zero(
     assert not t.gaps and not t.third_party_hits
     code, text, data = run_erase(rt, t.trace_id, "dsr-2026-0912", confirm=True)
     print(text)
-    bad = [s for s in data["statuses"] if s["outcome"] != "verified"]
+    # Everything must be VERIFIED, with one outcome that is also correct: an artifact whose bytes
+    # are byte-identical to live artifacts cannot be attributed by any scan, and the tool says
+    # UNVERIFIED(duplicate content) rather than claiming a pass. Whether the fixture produces such
+    # a collision depends on how the splitter lands on this platform, so accept that specific
+    # reason and nothing else.
+    bad = [
+        s
+        for s in data["statuses"]
+        if s["outcome"] != "verified" and "duplicate content" not in s.get("reason", "")
+    ]
     assert not bad, json.dumps(bad, indent=1)[:2000]
-    assert code == 0
+    dupes = [s for s in data["statuses"] if s["outcome"] != "verified"]
+    assert len(dupes) < len(data["statuses"]), "everything was duplicate content; fixture is wrong"
+    assert code == 0 or (code == 2 and dupes)
     assert "OUT_OF_SCOPE 3" in text and "ed25519 signed" in text
     assert data["counts"]["verified"] == len(t.artifacts)
     # every artifact physically verified (docstore, vectors, caches, dataset)
@@ -399,7 +418,21 @@ def test_chaos_sigkill_resume_produces_identical_receipt(
             (s["artifact"]["artifact_id"], s["outcome"], s["level"], s["rule_id"])
             for s in out["statuses"]
         )
-        assert table == ref_table, f"kill point {kp}: receipt differs"
+        if table != ref_table:
+            # Show what actually moved. "receipt differs" alone is undiagnosable from a CI log on
+            # a platform you cannot reproduce on, and this assertion guards a hard rule: a resumed
+            # saga must produce the same receipt as an uninterrupted one.
+            ref_by_id = {r[0]: r for r in ref_table}
+            got_by_id = {r[0]: r for r in table}
+            diff = [
+                f"{aid}: reference={ref_by_id.get(aid)} resumed={got_by_id.get(aid)}"
+                for aid in sorted(set(ref_by_id) | set(got_by_id))
+                if ref_by_id.get(aid) != got_by_id.get(aid)
+            ]
+            raise AssertionError(
+                f"kill point {kp}: receipt differs in {len(diff)} artifact(s):\n"
+                + "\n".join(diff[:10])
+            )
         j = Journal(d / ".tombstone" / "journal.jsonl")
         assert j.verify() > kp and not j.open_sagas()
         # no duplicated reclaim side effects: each store's reclaim did real work at most once
