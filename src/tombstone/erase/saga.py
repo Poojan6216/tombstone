@@ -632,13 +632,20 @@ class Saga:
                         detail = f"{b['probe']}: this artifact's own record bytes present ({b['detail']})"
                     elif content_hits > 0 and extra.get("live_duplicates", 0.0) > 0:
                         # Byte-identical content of other live artifacts is legitimately there.
+                        # Compare against what the *survivors* can account for, not against a
+                        # pre-reclaim byte count. `live_duplicates` is a fact about the lineage
+                        # graph and is identical on every attempt; the baseline is a measurement
+                        # whose moment differs between an uninterrupted run and a resumed one.
                         baseline = extra.get("baseline_content_matches")
-                        if baseline is not None and content_hits < baseline:
+                        per_copy = baseline / (extra["live_duplicates"] + 1.0) if baseline else 0.0
+                        explained_by_survivors = per_copy * extra["live_duplicates"]
+                        if per_copy > 0 and content_hits <= explained_by_survivors + 1e-9:
                             found = False
                             detail = (
                                 f"{b['probe']}: {int(content_hits)} content match(es) belong to "
                                 f"{int(extra['live_duplicates'])} other live artifact(s) with "
-                                f"identical bytes (baseline {int(baseline)}, own copy gone)"
+                                f"identical bytes ({int(explained_by_survivors)} explained by "
+                                f"survivors; own copy gone)"
                             )
                         else:
                             found = None
