@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Chroma: the physical probe on Linux CI found an erased vector in the rewritten segment's
+  `data_level0.bin` after a clean reclaim. chroma-hnswlib persists the index at its allocated
+  capacity from a `malloc`'d buffer it never clears, and does so on every open until the index
+  reaches `sync_threshold`, so the slots past `cur_element_count` carry whatever the allocator
+  handed over — on glibc, the buffer the deleted collection's index had just freed. The adapter
+  now zeroes those slots after the rewrite, when a new segment directory appears, and at open;
+  the receipt's reclaim measurement records `unused_slot_bytes_zeroed`. A header the decoder does
+  not recognise is left alone and counted in `segments_not_scrubbed`.
+
 ## [0.1.0] - 2026-09-09
 
 First release. Built end to end against a written specification, with every measured number

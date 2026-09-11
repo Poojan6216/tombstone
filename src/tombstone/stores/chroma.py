@@ -4,6 +4,17 @@ Native ``delete()`` in Chroma is a soft delete: hnswlib marks the label deleted 
 bytes stay in the segment's ``data_level0.bin``; the SQLite file keeps the row bytes in free
 pages and the embeddings queue until purged. Reclaim = rewrite the collection from survivors
 into a fresh segment, drop the old one, purge the queue and VACUUM the SQLite file.
+
+One more thing the rewrite has to clean up, found by the physical probe on Linux CI: Chroma's
+local HNSW segment persists its whole allocated capacity, not just its elements. chroma-hnswlib
+``malloc``s ``data_level0_memory_`` without clearing it and ``initPersistentIndex`` writes all of
+``max_elements_ * size_data_per_element_`` to ``data_level0.bin``, so the slots beyond
+``cur_element_count`` hold whatever the allocator handed over — on glibc, the buffer the deleted
+collection's index just freed, erased vectors included. That init runs on every open until the
+index reaches ``sync_threshold`` (1000 elements) and is persisted for real, so every process that
+touches the collection writes its own heap into the file. The adapter zeroes the unused slots
+after the rewrite, when a new segment directory appears after a write, and at open right after
+forcing that init; the reclaim measurement records the byte count.
 """
 
 from __future__ import annotations
@@ -12,6 +23,7 @@ import contextlib
 import math
 import os
 import sqlite3
+import struct
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -35,6 +47,36 @@ def _clean_md(md: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = str(v)
     return out
+
+
+# chroma-hnswlib HEADER_FIELDS, written back to back with no padding (hnswalg.h): the persistence
+# version (int), then offsetLevel0_, max_elements_, cur_element_count, size_data_per_element_,
+# label_offset_, offsetData_ (size_t), maxlevel_ (int), enterpoint_node_ (unsigned), maxM_, maxM0_,
+# M_ (size_t), mult_ (double), ef_construction_ (size_t). 100 bytes.
+_HNSW_HEADER = struct.Struct("<IQQQQQQiIQQQdQ")
+_HNSW_PERSISTENCE_VERSION = 1
+
+
+def _hnsw_header(seg: Path) -> dict[str, int] | None:
+    """Decode a persisted segment's ``header.bin``; None when it is not the layout we know."""
+    try:
+        raw = (seg / "header.bin").read_bytes()
+    except OSError:
+        return None
+    if len(raw) != _HNSW_HEADER.size:
+        return None
+    v = _HNSW_HEADER.unpack(raw)
+    if v[0] != _HNSW_PERSISTENCE_VERSION:
+        return None
+    return {
+        "offset_level0": v[1],
+        "max_elements": v[2],
+        "count": v[3],
+        "per_element": v[4],
+        "label_offset": v[5],
+        "offset_data": v[6],
+        "max_m0": v[10],
+    }
 
 
 def _content_matches(measurement: Mapping[str, float]) -> float:
@@ -71,6 +113,15 @@ class ChromaStore(VectorBackendBase):
             collection, metadata={"hnsw:space": "cosine"}, embedding_function=None
         )
         self.capabilities = self.detect_capabilities()
+        # Chroma builds the segment writer on first use; below sync_threshold that is
+        # initPersistentIndex, which writes this process's uninitialised heap into the segment
+        # files (see the module docstring). Take that first use now, then zero what it wrote
+        # beyond the live elements, so an open never leaves memory contents on disk.
+        self._scrubbed_segments: set[str] = set()
+        if VerifyLevel.PHYSICAL in self.capabilities:
+            with contextlib.suppress(Exception):
+                self._coll.count()
+            self._scrub_unused_slots()
 
     def detect_capabilities(self) -> frozenset[VerifyLevel]:
         caps = {VerifyLevel.LOGICAL}
@@ -102,6 +153,10 @@ class ChromaStore(VectorBackendBase):
                 metadatas=cast(Any, [_clean_md(r.metadata) for r in batch]),
                 documents=[r.document or "" for r in batch],
             )
+        # the first write into a new collection creates its segment directory, and that is the
+        # other moment Chroma writes an uninitialised buffer to disk; once per directory
+        if VerifyLevel.PHYSICAL in self.capabilities:
+            self._scrub_unused_slots(only_new=True)
 
     def _get(self, keys: Sequence[str]) -> dict[str, Hit]:
         if not keys:
@@ -210,6 +265,8 @@ class ChromaStore(VectorBackendBase):
                     "deleted": 0.0,
                     "survivors": float(self.count()),
                     "wal_rows_purged": 0.0,
+                    "unused_slot_bytes_zeroed": 0.0,
+                    "segments_not_scrubbed": 0.0,
                 },
                 detail="nothing to delete and no residue found",
             )
@@ -235,7 +292,10 @@ class ChromaStore(VectorBackendBase):
                 metadatas=cast(Any, survivors["metadatas"][sl]),
                 documents=survivors["documents"][sl],
             )
-        # 3. purge the embeddings queue (Chroma's write-ahead log inside sqlite) and VACUUM
+        # 3. the fresh segment's files were just written from an uninitialised buffer: zero the
+        # slots no element occupies (module docstring), before anything measures them
+        scrubbed, skipped = self._scrub_unused_slots()
+        # 4. purge the embeddings queue (Chroma's write-ahead log inside sqlite) and VACUUM
         purged = self._purge_sqlite()
         # Chroma flushes segments from a background thread, so an orphan segment of the old
         # collection can outlive delete_collection for a moment. This used to sleep a fixed second
@@ -253,6 +313,9 @@ class ChromaStore(VectorBackendBase):
         unchanged = 0
         while True:
             self._remove_orphan_segments()
+            more, more_skipped = self._scrub_unused_slots(only_new=True)  # one that appeared late
+            scrubbed += more
+            skipped += [x for x in more_skipped if x not in skipped]
             current = math.fsum(
                 _content_matches(self.probe_physical(r).measurement)
                 for r in refs
@@ -272,8 +335,82 @@ class ChromaStore(VectorBackendBase):
                 "deleted": float(len(to_delete)),
                 "survivors": float(len(survivors["ids"])),
                 "wal_rows_purged": float(purged),
+                "unused_slot_bytes_zeroed": float(scrubbed),
+                "segments_not_scrubbed": float(len(skipped)),
             },
+            detail="; ".join(skipped),
         )
+
+    def _scrub_unused_slots(self, only_new: bool = False) -> tuple[int, list[str]]:
+        """Zero every persisted HNSW slot past ``cur_element_count`` in each segment directory.
+
+        Chroma never reads those slots as elements (hnswlib addresses elements below the count,
+        and clears a slot before it fills it), so zeroing them changes nothing the index can see;
+        it only stops the heap contents ``initPersistentIndex`` wrote there from sitting on disk.
+        Anything whose layout does not match the header exactly is left alone and reported: a
+        scrub that guesses could damage a live index, and the byte scan will tell the truth about
+        what remains. A stretch that is already zero is read, not rewritten, so a clean index
+        costs one pass over its unused region. ``only_new`` limits the pass to directories this
+        store has not scrubbed before. Returns (bytes zeroed, skipped segments with reasons)."""
+        zeroed = 0
+        skipped: list[str] = []
+        for seg in sorted(self.path.iterdir()):
+            if not seg.is_dir() or not (seg / "header.bin").is_file():
+                continue
+            if only_new and seg.name in self._scrubbed_segments:
+                continue
+            h = _hnsw_header(seg)
+            if h is None:
+                skipped.append(f"{seg.name}: unrecognised header")
+                continue
+            dims_from_layout = (h["label_offset"] - h["offset_data"]) // 4
+            consistent = (
+                h["offset_data"] == 4 + 4 * h["max_m0"]
+                and h["per_element"] == h["label_offset"] + 8
+                and (h["label_offset"] - h["offset_data"]) % 4 == 0
+                and (not self.dims or dims_from_layout == self.dims)
+                and h["count"] <= h["max_elements"]
+            )
+            if not consistent:
+                skipped.append(f"{seg.name}: header inconsistent with dims={self.dims}")
+                continue
+            seg_ok = True
+            for fname, per in (("data_level0.bin", h["per_element"]), ("length.bin", 4)):
+                f = seg / fname
+                if not f.is_file():
+                    continue
+                size = f.stat().st_size
+                start = (
+                    h["offset_level0"] + h["count"] * per
+                    if fname == "data_level0.bin"
+                    else h["count"] * per
+                )
+                if size > h["max_elements"] * per + h["offset_level0"] or start > size:
+                    skipped.append(f"{seg.name}/{fname}: size {size} does not fit the header")
+                    seg_ok = False
+                    continue
+                if start == size:
+                    continue
+                with f.open("r+b") as fh:
+                    pos = start
+                    dirty = False
+                    while pos < size:
+                        fh.seek(pos)
+                        block = fh.read(min(size - pos, 1 << 20))
+                        if not block:
+                            break
+                        if any(block):
+                            fh.seek(pos)
+                            fh.write(b"\0" * len(block))
+                            zeroed += len(block)
+                            dirty = True
+                        pos += len(block)
+                    if dirty:
+                        fh.flush()
+                        os.fsync(fh.fileno())
+            if seg_ok:
+                self._scrubbed_segments.add(seg.name)
+        return zeroed, skipped
 
     def _dump_all(self) -> dict[str, list[Any]]:
         n = self._coll.count()
