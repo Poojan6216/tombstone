@@ -245,8 +245,12 @@ class ChromaStore(VectorBackendBase):
         # it does not, and bounded so a store that never settles still returns.
         import time
 
-        deadline = time.monotonic() + 15.0
+        # Stop at zero, or when the count has held still for several consecutive sweeps — a
+        # background flush can pause, so "stopped falling once" is not "finished", which is how an
+        # earlier attempt at this exited early and left one artifact's bytes on disk.
+        deadline = time.monotonic() + 20.0
         previous: float | None = None
+        unchanged = 0
         while True:
             self._remove_orphan_segments()
             current = math.fsum(
@@ -254,10 +258,13 @@ class ChromaStore(VectorBackendBase):
                 for r in refs
                 if r.embedding_fingerprint
             )
-            if current in (0, previous) or time.monotonic() >= deadline:
+            if current == 0.0 or time.monotonic() >= deadline:
+                break
+            unchanged = unchanged + 1 if current == previous else 0
+            if unchanged >= 4:  # held still through four sweeps: as settled as it will get
                 break
             previous = current
-            time.sleep(0.2)
+            time.sleep(0.25)
         return ReclaimResult(
             noop=False,
             method="compact + rewrite segment",
