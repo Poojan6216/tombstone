@@ -37,7 +37,18 @@ qdrant = ["qdrant-client>=1.9", "numpy>=1.24"]
 chroma = ["chromadb>=1.0", "numpy>=1.24"]
 faiss = ["faiss-cpu>=1.8", "numpy>=1.24"]
 langchain = ["langchain-core>=0.3", "langchain-classic>=1.0", "langchain-community>=0.3", "langchain-text-splitters>=0.3", "sqlalchemy>=2"]
-train = ["torch>=2.2", "transformers>=4.45,<5", "peft>=0.13", "accelerate>=1.0", "numpy>=1.24"]
+train = [
+  # torch < 2.6.0 carries a critical advisory (torch.load with weights_only=True reaches code
+  # execution), so the floor is 2.6 everywhere a wheel exists. Intel macOS has none — 2.2.2 was
+  # the last x86_64 darwin build — so that platform keeps the old floor and is called out in
+  # SECURITY.md rather than silently shipped as if it were equivalent.
+  "torch>=2.6; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+  "torch>=2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "transformers>=4.45,<5",
+  "peft>=0.13",
+  "accelerate>=1.0",
+  "numpy>=1.24",
+]
 mcp = ["mcp>=1.10"]
 bench = [
   "sentence-transformers>=3,<6",

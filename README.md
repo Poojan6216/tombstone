@@ -212,6 +212,13 @@ Full matrices, the hyperparameter grid, the anti-results and the attacks that be
 - [docs/demo.md](docs/demo.md) — the three demos, generated
 - [docs/writeup.md](docs/writeup.md) — the technical post
 
+## Security
+
+The core install carries no packages with open advisories; the optional extras do, and
+[SECURITY.md](SECURITY.md) lists each one, what it affects, and the two we have not fixed and why.
+Subject ids are HMACs under a per-installation pepper, and no content of any kind reaches the
+lineage database, journal, ledger or receipts — enforced by a test that is never skipped.
+
 ## Prior art — who is already here, and where they stop
 
 - **Ghost Vectors** (arXiv 2606.18497) and **Ghost Echoes** (arXiv 2608.20352), Trinity College,
