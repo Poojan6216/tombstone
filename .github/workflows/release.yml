@@ -13,6 +13,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The same Postgres the CI tests get. Without it the suite hunts for a server on the runner
+    # and the release gate ends up testing something other than what CI tested — which is the
+    # one thing a release gate must not do.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TOMBSTONE_PG_DSN: postgresql://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

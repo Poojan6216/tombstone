@@ -49,6 +49,15 @@ generated from a committed command into `RESULTS.md`.
   refuses lineage gaps, requires a reason, and will not erase against a view that has gone stale.
 
 ### Fixed
+- The test helper that gives each test its own database built the new DSN by splitting the old
+  one on its last "/". For a server reached over a unix socket, whose socket directory rides in a
+  `?host=` query parameter, that lands inside the path and appends the database name to the
+  *host* — so the connection hunts for a socket in a directory that does not exist and reports
+  "is the server running?" about a server that is running perfectly well. It now swaps only the
+  database component. This is what failed the first v0.1.0 release build.
+- `release.yml` ran the full suite with no Postgres service, so the release gate tested a
+  different environment than CI did. It now gets the same pgvector service and DSN, and a repo
+  check asserts the two stay in step.
 - The MCP server reports its version in `serverInfo`, which was an empty string.
 - The receipt labelled byte-identical duplicate content `UNVERIFIED-managed` and told the
   operator to grant file access or run `VACUUM FULL` — a remedy that cannot help, because the

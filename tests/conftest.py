@@ -5,6 +5,7 @@ import secrets
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 import pytest
 
@@ -51,6 +52,20 @@ def pg() -> Iterator[_pg.PgHandle]:
     handle.stop()
 
 
+def _with_database(dsn: str, name: str) -> str:
+    """Point a DSN at a different database, changing nothing else.
+
+    String surgery is not safe here. A server reached over a unix socket carries its socket
+    directory as a query parameter — ``postgresql://postgres@/postgres?host=/tmp/pg-xyz`` — and
+    splitting on the last "/" lands inside that path, so the database name is appended to the
+    *host* instead of replacing the database. The connection then looks for a socket in a
+    directory that does not exist, which reads as "is the server running?" and sends you hunting
+    for a server that is running perfectly well.
+    """
+    parts = urlsplit(dsn)
+    return urlunsplit(parts._replace(path=f"/{name}"))
+
+
 @pytest.fixture
 def pg_database(pg: _pg.PgHandle) -> Iterator[str]:
     """A fresh database per test, dropped afterwards."""
@@ -59,8 +74,7 @@ def pg_database(pg: _pg.PgHandle) -> Iterator[str]:
     name = f"tomb_{uuid.uuid4().hex[:12]}"
     with psycopg.connect(pg.dsn, autocommit=True) as conn:
         conn.execute(f'CREATE DATABASE "{name}"')
-    base, _, _ = pg.dsn.rpartition("/")
-    dsn = f"{base}/{name}"
+    dsn = _with_database(pg.dsn, name)
     with psycopg.connect(dsn, autocommit=True) as conn:
         if pg.has_vector:
             conn.execute("CREATE EXTENSION IF NOT EXISTS vector")

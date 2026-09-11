@@ -257,3 +257,21 @@ def test_docs_cite_measured_numbers_that_are_ready() -> None:
         if Path(p.split(":")[0]).name not in pending
     ]
     assert not problems, problems
+
+
+def test_the_release_gate_runs_what_ci_runs() -> None:
+    """A release gate that tests a different environment than CI is not a gate.
+
+    v0.1.0's first attempt failed here: release.yml ran the full suite with no Postgres service,
+    so the tests hunted for a server on the runner, found a socket-based one, and every pgvector
+    test errored — after CI had been green four runs running.
+    """
+    import yaml
+
+    ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+    rel = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text())
+    build = rel["jobs"]["build"]
+    tests = ci["jobs"]["tests"]
+    assert "postgres" in build.get("services", {}), "release build has no Postgres service"
+    assert build["services"]["postgres"]["image"] == tests["services"]["postgres"]["image"]
+    assert build["env"]["TOMBSTONE_PG_DSN"] == tests["env"]["TOMBSTONE_PG_DSN"]
