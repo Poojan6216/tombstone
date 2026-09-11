@@ -1,0 +1,102 @@
+{
+ "composition": {
+  "ensemble": "84/120",
+  "merged": "0/6 (linear sum), 0/6 (cat), 1/6 (linear avg) on the 6-subject diagnostic",
+  "per_shard": "115/120",
+  "shards": 16
+ },
+ "config": {
+  "alpha": 32,
+  "base_model": "Qwen/Qwen2.5-0.5B",
+  "batch_size": 4,
+  "epochs": 12,
+  "lr": 0.001,
+  "max_len": 96,
+  "rank": 16,
+  "repeats": 4,
+  "seed": 20260908,
+  "targets": [
+   "q_proj",
+   "k_proj",
+   "v_proj",
+   "o_proj",
+   "gate_proj",
+   "up_proj",
+   "down_proj"
+  ]
+ },
+ "device": "cpu",
+ "generated": "20260910T144725",
+ "git": "8068992",
+ "grid": [],
+ "kind": "unlearn",
+ "machine": {
+  "cpus": 8,
+  "machine": "x86_64",
+  "platform": "macOS-15.7.9-x86_64-i386-64bit",
+  "python": "3.12.13"
+ },
+ "methods": [
+  {
+   "canary_extracted": 15,
+   "canary_hits_by_subject": {
+    "S-0001": true,
+    "S-0002": true,
+    "S-0003": true,
+    "S-0004": true,
+    "S-0005": true,
+    "S-0006": false,
+    "S-0007": true,
+    "S-0008": false,
+    "S-0009": true,
+    "S-0010": false,
+    "S-0011": true,
+    "S-0012": false,
+    "S-0013": true,
+    "S-0014": true,
+    "S-0015": true,
+    "S-0016": true,
+    "S-0017": true,
+    "S-0018": true,
+    "S-0019": true,
+    "S-0020": false
+   },
+   "canary_rate": 0.75,
+   "canary_total": 20,
+   "holdout_ppl": 230.58488896172182,
+   "label": "nothing",
+   "method": "serving model unchanged",
+   "mia": {
+    "loss": {
+     "attack": "loss",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    },
+    "mink": {
+     "attack": "mink",
+     "auc": 1.0,
+     "ci_high": 1.0,
+     "ci_low": 1.0,
+     "n_members": 20,
+     "n_nonmembers": 20
+    }
+   },
+   "name": "M0",
+   "note": "shard ensemble; holdout ppl 230.58",
+   "others_extracted": 0,
+   "others_total": 0,
+   "wall_s": 0.0
+  }
+ ],
+ "model": "Qwen/Qwen2.5-0.5B",
+ "partial": true,
+ "relearn": [],
+ "shards": 16,
+ "subjects": 20,
+ "train_shards_s": 3772.671643972397,
+ "train_subjects": 120,
+ "train_unsharded_s": 3996.812837123871
+}

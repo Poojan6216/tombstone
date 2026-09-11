@@ -33,8 +33,8 @@ was trained without sharding. The subject is named inside two other subjects' do
 
 Tombstone erases what it can, verifies each artifact at the strongest level the store permits,
 and writes a receipt that says `UNVERIFIED-managed` for the database it could not check,
-`RESIDUAL(model)` for the adapter it could only approximately unlearn (canary 1/20 still
-extractable, MIA AUC 0.86 [0.74, 0.96]), and `NEEDS_HUMAN 2` for the two documents it will not
+`RESIDUAL(model)` for the adapter it could only approximately unlearn (canary 0/20 still
+extractable, MIA AUC 0.69 [0.51, 0.84]), and `NEEDS_HUMAN 2` for the two documents it will not
 touch because they belong to other people. Exit code 2. A tool that printed "erasure complete"
 here would be lying to a regulator on the operator's behalf.
 
@@ -77,13 +77,11 @@ or average — lost the memorised facts (0/6, 0/6, 1/6 canaries where each shard
 prescribes: a prediction-level ensemble, weighted by how well each shard recognises the context.
 
 On 20 subjects with `Qwen2.5-0.5B` on a CPU: exact shard retrain took canary extraction from
-18/20 to 0/20 and MIA AUC from 1.00 to 0.54 [0.36, 0.73] at a held-out perplexity cost of
-+14.2 (205.7 → 219.9); NPO left 1/20 extractable at AUC 0.86, gradient difference 5/20 at 1.00
+17/20 to 0/20 and MIA AUC from 1.00 to 0.41 [0.23, 0.61] at a held-out perplexity cost of
+-67.7 (298.7 → 231.0); NPO left 0/20 extractable at AUC 0.69, gradient difference 5/20 at 0.91
 (`bench/results/unlearn-latest.json`). And the un-forgetting: 50 fine-tuning steps on unrelated
-news text brought 1/20 of the NPO-forgotten canaries back. The retrained shards stayed at
+news text brought 0/20 of the NPO-forgotten canaries back. The retrained shards stayed at
 0/60. The data is not in the weights; nothing can be relearned from it.
-
-**On the two approximate methods, this run has no result.** Both are applied to the unsharded adapter, whose held-out perplexity is 355634 against 205.7 for the shard ensemble: it had collapsed before any unlearning ran, so their canary counts and the resurfacing above describe damage to a broken model rather than the methods. The figures are shown because they were measured. The exact-retrain numbers are unaffected — they are measured on the shard ensemble.
 
 ## The layer nobody can erase
 

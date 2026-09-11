@@ -26,7 +26,7 @@ both indexes, source rows dropped — and believes the deletion is complete.
 ```text
 $ tombstone verify --subject S-0042 --after-native-delete
 after native delete()
-subject: hmac:509d…ce2c   (raw id never logged)
+subject: hmac:f675…1d04   (raw id never logged)
 artifacts descending from this subject: 23
 
   source  ×3 docs                   HIDDEN     logical PASS, physical FAIL
@@ -58,7 +58,7 @@ Every number below is produced by a committed command from a committed JSON file
 <!-- generated:headline:start -->
 <!-- measured:start -->
 1. **After a native `delete()`, 92.0%-100.0% of a subject's vectors are still physically recoverable** from the index files, depending on the backend (chroma 99.8%, faiss 92.0%, qdrant 100.0%, pgvector 94.9%; 200 subjects each) — while every one of them is logically gone (100.0% exclusion). After `tombstone erase`, 0.0% of the subjects' own records remain and 0.0% of their vectors have bytes still attributable to them. A further 0.0%-8.0% have bytes that are byte-identical to records belonging to *other* subjects (shared boilerplate); a byte scan cannot tell those two copies apart, so they are reported separately and never counted as the erased record's residue. Source: `bench/results/residue-latest.json`, command `uv run python bench/residue/run_residue.py --all`.
-2. **Exact shard unlearning vs approximate** on `Qwen/Qwen2.5-0.5B` (20 subjects): before, canary extraction 18/20, MIA AUC 1.00 [1.00,1.00], held-out perplexity 205.7; exact shard retrain: canary extraction 0/20, MIA AUC 0.54 [0.36,0.73], held-out perplexity 219.9; NPO: canary extraction 1/20, MIA AUC 0.86 [0.74,0.96], held-out perplexity 242268.7; gradient difference: canary extraction 5/20, MIA AUC 1.00 [1.00,1.00], held-out perplexity 360642.1. Source: `bench/results/unlearn-latest.json`, command `uv run python bench/unlearn/run_unlearn.py --all`. NPO and gradient difference are applied to the unsharded adapter, whose held-out perplexity is 355634 against 205.7 for the shard ensemble: that model had already collapsed before any unlearning ran, so those two rows measure damage to a broken model and not forgetting. They are shown because they were measured, and are not a claim about NPO or gradient difference. The exact-retrain row is unaffected.
+2. **Exact shard unlearning vs approximate** on `Qwen/Qwen2.5-0.5B` (20 subjects): before, canary extraction 17/20, MIA AUC 1.00 [1.00,1.00], held-out perplexity 298.7; exact shard retrain: canary extraction 0/20, MIA AUC 0.41 [0.23,0.61], held-out perplexity 231.0; NPO: canary extraction 0/20, MIA AUC 0.69 [0.51,0.84], held-out perplexity 82.4; gradient difference: canary extraction 5/20, MIA AUC 0.91 [0.76,1.00], held-out perplexity 103.5. Source: `bench/results/unlearn-latest.json`, command `uv run python bench/unlearn/run_unlearn.py --all`.
 3. **The layer nobody can erase**: after a full Tombstone erasure, an attacker estimating "was this subject ever here?" from retrieval-context drift (*Ghost Echoes* protocol) reaches paired-comparison accuracy 70.0% at budget 5, 72.5% at budget 10, 65.0% at budget 20, 70.0% at budget 40. Tombstone measures and reports this; it does not fix it. Source: `bench/results/attacks-latest.json`.
 <!-- measured:end -->
 <!-- generated:headline:end -->

@@ -26,8 +26,8 @@
   ]
  },
  "device": "cpu",
- "generated": "20260911T090522",
- "git": "7c94343",
+ "generated": "20260911T003236",
+ "git": "a7b2076",
  "grid": [
   {
    "canary_extracted": 0,
@@ -459,44 +459,10 @@
    "others_extracted": 13,
    "others_total": 20,
    "wall_s": 104.48305892944336
-  },
-  {
-   "canary_extracted": 0,
-   "canary_hits_by_subject": {
-    "S-0001": false,
-    "S-0002": false
-   },
-   "canary_rate": 0.0,
-   "canary_total": 2,
-   "holdout_ppl": 257111.40822247637,
-   "label": "full retrain (oracle)",
-   "method": "retrain the unsharded adapter from scratch without the subject",
-   "mia": {
-    "loss": {
-     "attack": "loss",
-     "auc": 1.0,
-     "ci_high": 1.0,
-     "ci_low": 1.0,
-     "n_members": 2,
-     "n_nonmembers": 2
-    },
-    "mink": {
-     "attack": "mink",
-     "auc": 0.75,
-     "ci_high": 1.0,
-     "ci_low": 0.0,
-     "n_members": 2,
-     "n_nonmembers": 2
-    }
-   },
-   "name": "M4",
-   "note": "retrained once without 2 subject(s) (CPU-bounded); the unsharded reference is 'M0-unsharded'",
-   "others_extracted": 11,
-   "others_total": 20,
-   "wall_s": 29464.25693178177
   }
  ],
  "model": "Qwen/Qwen2.5-0.5B",
+ "partial": true,
  "relearn": [
   {
    "canary_extracted": 0,
@@ -508,30 +474,6 @@
    "canary_extracted": 0,
    "canary_total": 20,
    "method": "M1 npo",
-   "steps": 50
-  },
-  {
-   "canary_extracted": 6,
-   "canary_total": 20,
-   "method": "M2 gradient_difference",
-   "steps": 10
-  },
-  {
-   "canary_extracted": 1,
-   "canary_total": 20,
-   "method": "M2 gradient_difference",
-   "steps": 50
-  },
-  {
-   "canary_extracted": 0,
-   "canary_total": 60,
-   "method": "M3 exact (per-shard adapters)",
-   "steps": 10
-  },
-  {
-   "canary_extracted": 0,
-   "canary_total": 60,
-   "method": "M3 exact (per-shard adapters)",
    "steps": 50
   }
  ],

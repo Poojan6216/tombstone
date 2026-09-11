@@ -1,7 +1,7 @@
 {
- "ensemble": "94/120",
- "generated": "20260910T195209",
- "git": "e7347d7",
+ "ensemble": "84/120",
+ "generated": "20260910T135532",
+ "git": "8068992",
  "kind": "composition",
  "machine": {
   "cpus": 8,
@@ -10,6 +10,6 @@
   "python": "3.12.13"
  },
  "merged": "0/6 (linear sum), 0/6 (cat), 1/6 (linear avg) on the 6-subject diagnostic",
- "per_shard": "111/120",
+ "per_shard": "115/120",
  "shards": 16
 }

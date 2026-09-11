@@ -191,8 +191,52 @@
    "key": "unlearn-train-unsharded",
    "seconds": 3996.8,
    "when": "20260910T115959"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-shards",
+   "seconds": 3504.2,
+   "shards": 16,
+   "when": "20260910T170307"
+  },
+  {
+   "examples": 120,
+   "key": "unlearn-train-unsharded",
+   "seconds": 3548.5,
+   "when": "20260910T180216"
+  },
+  {
+   "key": "unlearn-M3",
+   "seconds": 6238.6,
+   "subjects": 20,
+   "when": "20260910T223126"
+  },
+  {
+   "key": "unlearn-M1",
+   "seconds": 245.5,
+   "when": "20260911T002101"
+  },
+  {
+   "key": "unlearn-M2",
+   "seconds": 104.5,
+   "when": "20260911T003105"
+  },
+  {
+   "key": "unlearn-M4",
+   "seconds": 29464.3,
+   "when": "20260911T090522"
+  },
+  {
+   "key": "unlearn-bench-total",
+   "seconds": 61238.9,
+   "when": "20260911T090522"
+  },
+  {
+   "key": "attacks-bench",
+   "seconds": 0.1,
+   "when": "20260911T095243"
   }
  ],
  "gpu_minutes": 0.0,
- "total_cpu_hours": 29.513
+ "total_cpu_hours": 58.498
 }
