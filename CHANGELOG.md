@@ -16,6 +16,7 @@ All notable changes to this project are documented here. The format follows
 - `tombstone.forget` on the MCP server: one tool call from a subject id, with the same
   elicitation confirmation `tombstone.erase` requires, and it erases exactly the set that
   confirmation listed rather than re-tracing afterwards.
+- The MCP server reports its version in `serverInfo`, which was an empty string.
 - `tombstone ui`: a local page for the people who receive deletion requests and do not use a
   terminal. Loopback only, no cookies, and every API call must carry a per-run token sent in a
   request header, so a page the operator is browsing cannot drive their deletion tool. It

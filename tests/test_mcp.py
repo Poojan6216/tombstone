@@ -442,3 +442,38 @@ def test_forget_without_elicitation_gets_the_cli_command_not_an_erasure(
     # the fallback it names must be the one-command path, not the two-command one
     assert "tombstone forget" in text and "--trace" not in text, text
     assert journal.records() == []
+
+
+def test_the_server_names_its_version(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clients display serverInfo. An empty version tells the operator nothing about what is
+    actually running against their data."""
+    from tombstone import __version__
+    from tombstone.mcp.server import build_server
+
+    monkeypatch.chdir(tmp_path)
+    h, _trace = _setup(tmp_path)
+    server = build_server(h["cfg_path"])
+    assert server.version == __version__ != ""
+
+
+def test_every_tool_is_registered_and_only_two_can_destroy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tombstone.mcp.server import build_server
+
+    monkeypatch.chdir(tmp_path)
+    h, _trace = _setup(tmp_path)
+    server = build_server(h["cfg_path"])
+
+    async def names():  # noqa: ANN202
+        return {t.name for t in await server.list_tools()}
+
+    got = anyio.run(names)
+    assert got == {
+        "tombstone.forget",
+        "tombstone.trace",
+        "tombstone.verify",
+        "tombstone.erase",
+        "tombstone.receipt",
+        "tombstone.status",
+    }, got

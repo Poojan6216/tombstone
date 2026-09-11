@@ -22,6 +22,7 @@ from mcp.server.mcpserver import (
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, Field
 
+from tombstone import __version__
 from tombstone.errors import TombstoneError
 from tombstone.registry import Runtime
 
@@ -262,6 +263,7 @@ def build(config: str | Path | None) -> MCPServer:
     state_key = hashlib.sha256(b"tombstone-mcp-request-state" + runtime.pepper()).digest()
     server: MCPServer = MCPServer(
         "tombstone",
+        version=__version__,  # clients show this; an empty string tells the operator nothing
         instructions=(
             "Tombstone tracks where a data subject's data went (chunks, embeddings, caches, "
             "training examples, adapters), erases it everywhere, and returns a receipt that says "
