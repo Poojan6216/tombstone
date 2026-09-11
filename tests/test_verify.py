@@ -211,7 +211,15 @@ def test_independent_verifier_catches_reinserted_vector(
 
     rt2 = Runtime.load(cfg)
     backend = rt2.store("faiss:kb-v1")
-    victim = next(s for s in data["statuses"] if s["artifact"]["store"] == "faiss:kb-v1")
+    # A VERIFIED one: an artifact reported UNVERIFIED(duplicate content) is one whose bytes a
+    # scan cannot attribute, so re-inserting it is invisible by design and the receipt still
+    # agrees. Statuses are ordered by ULID, whose random tail varies between runs, so the
+    # first faiss row is sometimes such an artifact — that was a flaky pick, not a bug.
+    victim = next(
+        s
+        for s in data["statuses"]
+        if s["artifact"]["store"] == "faiss:kb-v1" and s["outcome"] == "verified"
+    )
     emb = _stores.embedder()
     from tombstone.lineage.capture import EmbedRecord
 
