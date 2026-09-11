@@ -541,7 +541,11 @@ class Saga:
         n = 0
         for a in g.refs:
             dupes = self.rt.lineage.live_duplicates(
-                a.store, a.embedding_fingerprint, a.content_hash, a.artifact_id
+                a.store,
+                a.embedding_fingerprint,
+                a.content_hash,
+                a.artifact_id,
+                erasing=[x.artifact_id for x in self.trace.artifacts],
             )
             if dupes <= 0:
                 continue

@@ -342,23 +342,38 @@ class LineageStore:
         return out
 
     def live_duplicates(
-        self, store: str, fingerprint: str | None, content_hash: str, exclude: str
+        self,
+        store: str,
+        fingerprint: str | None,
+        content_hash: str,
+        exclude: str,
+        erasing: Sequence[str] = (),
     ) -> int:
-        """Other non-tombstoned nodes in ``store`` holding the same vector bytes or content.
-        Their bytes are indistinguishable from the artifact's own in a byte scan."""
+        """Nodes in ``store`` holding the same vector bytes or content as this artifact, whose
+        copies a byte scan cannot tell apart from its own.
+
+        ``erasing`` is every artifact in the erasure now running. They must be excluded explicitly
+        rather than left to the tombstones table, because that table grows *during* the saga: a
+        run killed and resumed mid-suppression evaluated this at a different point and got a
+        different count, so the same erasure produced ``VERIFIED`` on one attempt and
+        ``UNVERIFIED(duplicate content)`` on the next. A receipt that depends on when the machine
+        died is not a receipt (Hard Rule 9).
+        """
+        skip = {exclude, *erasing}
+        marks = ",".join("?" for _ in skip)
         if fingerprint:
             row = self._exec(
-                "SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id <> ? "
+                f"SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id NOT IN ({marks}) "
                 "AND (n.embedding_fingerprint = ? OR n.content_hash = ?) "
                 "AND n.artifact_id NOT IN (SELECT artifact_id FROM tombstones)",
-                (store, exclude, fingerprint, content_hash),
+                (store, *sorted(skip), fingerprint, content_hash),
             ).fetchone()
         else:
             row = self._exec(
-                "SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id <> ? "
+                f"SELECT COUNT(*) FROM nodes n WHERE n.store = ? AND n.artifact_id NOT IN ({marks}) "
                 "AND n.content_hash = ? "
                 "AND n.artifact_id NOT IN (SELECT artifact_id FROM tombstones)",
-                (store, exclude, content_hash),
+                (store, *sorted(skip), content_hash),
             ).fetchone()
         return int(row[0]) if row else 0
 
