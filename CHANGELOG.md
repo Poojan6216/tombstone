@@ -6,38 +6,7 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-- `tombstone forget <subject> --reason <id>`: trace, show what was found, ask once, erase. The
-  two-command path made a person copy a 26-character trace id between commands; the confirmation
-  is now a human answering a list of real artifacts instead of a `--confirm` flag.
-- A public Python API — `from tombstone import trace, forget` — so an erasure can run inside the
-  operator's own delete-account handler with no command at all. Both are resolved lazily, so
-  `import tombstone` still pulls in nothing heavy.
-- `tombstone.forget` on the MCP server: one tool call from a subject id, with the same
-  elicitation confirmation `tombstone.erase` requires, and it erases exactly the set that
-  confirmation listed rather than re-tracing afterwards.
-- The MCP server reports its version in `serverInfo`, which was an empty string.
-- `tombstone ui`: a local page for the people who receive deletion requests and do not use a
-  terminal. Loopback only, no cookies, and every API call must carry a per-run token sent in a
-  request header, so a page the operator is browsing cannot drive their deletion tool. It
-  refuses lineage gaps, requires a reason, and will not erase against a view that has gone stale.
-
-### Fixed
-- The receipt labelled byte-identical duplicate content `UNVERIFIED-managed` and told the
-  operator to grant file access or run `VACUUM FULL` — a remedy that cannot help, because the
-  store was read perfectly well and the remaining bytes belong to other live records. That case
-  now reads `UNVERIFIED-duplicate` and says there is nothing to fix. The rule id, outcome and
-  level are unchanged, so replay and independent verification are unaffected.
-- Chroma: the physical probe on Linux CI found an erased vector in the rewritten segment's
-  `data_level0.bin` after a clean reclaim. chroma-hnswlib persists the index at its allocated
-  capacity from a `malloc`'d buffer it never clears, and does so on every open until the index
-  reaches `sync_threshold`, so the slots past `cur_element_count` carry whatever the allocator
-  handed over — on glibc, the buffer the deleted collection's index had just freed. The adapter
-  now zeroes those slots after the rewrite, when a new segment directory appears, and at open;
-  the receipt's reclaim measurement records `unused_slot_bytes_zeroed`. A header the decoder does
-  not recognise is left alone and counted in `segments_not_scrubbed`.
-
-## [0.1.0] - 2026-09-09
+## [0.1.0] - 2026-09-11
 
 First release. Built end to end against a written specification, with every measured number
 generated from a committed command into `RESULTS.md`.
@@ -65,11 +34,44 @@ generated from a committed command into `RESULTS.md`.
   elicitation with a sealed request state and refuses on clients without it.
 - Benchmarks: residue matrix (B0–B4 × four backends), unlearning matrix (M0–M4), nine attack
   strategies, plots, and a generated `RESULTS.md`.
+- `tombstone forget <subject> --reason <id>`: trace, show what was found, ask once, erase. The
+  two-command path made a person copy a 26-character trace id between commands; the confirmation
+  is now a human answering a list of real artifacts instead of a `--confirm` flag.
+- A public Python API — `from tombstone import trace, forget` — so an erasure can run inside the
+  operator's own delete-account handler with no command at all. Both are resolved lazily, so
+  `import tombstone` still pulls in nothing heavy.
+- `tombstone.forget` on the MCP server: one tool call from a subject id, with the same
+  elicitation confirmation `tombstone.erase` requires, and it erases exactly the set that
+  confirmation listed rather than re-tracing afterwards.
+- `tombstone ui`: a local page for the people who receive deletion requests and do not use a
+  terminal. Loopback only, no cookies, and every API call must carry a per-run token sent in a
+  request header, so a page the operator is browsing cannot drive their deletion tool. It
+  refuses lineage gaps, requires a reason, and will not erase against a view that has gone stale.
+
+### Fixed
+- The MCP server reports its version in `serverInfo`, which was an empty string.
+- The receipt labelled byte-identical duplicate content `UNVERIFIED-managed` and told the
+  operator to grant file access or run `VACUUM FULL` — a remedy that cannot help, because the
+  store was read perfectly well and the remaining bytes belong to other live records. That case
+  now reads `UNVERIFIED-duplicate` and says there is nothing to fix. The rule id, outcome and
+  level are unchanged, so replay and independent verification are unaffected.
+- Chroma: the physical probe on Linux CI found an erased vector in the rewritten segment's
+  `data_level0.bin` after a clean reclaim. chroma-hnswlib persists the index at its allocated
+  capacity from a `malloc`'d buffer it never clears, and does so on every open until the index
+  reaches `sync_threshold`, so the slots past `cur_element_count` carry whatever the allocator
+  handed over — on glibc, the buffer the deleted collection's index had just freed. The adapter
+  now zeroes those slots after the rewrite, when a new segment directory appears, and at open;
+  the receipt's reclaim measurement records `unused_slot_bytes_zeroed`. A header the decoder does
+  not recognise is left alone and counted in `segments_not_scrubbed`.
 
 ### Decisions worth knowing
 - Intel macOS pins torch to 2.2.2 (and transformers < 5, numpy < 2) via platform-marked
   constraints; everything else resolves normally.
 - Weight-level merges of shard adapters lost memorised facts in measurement, so serving is a
   prediction-level ensemble.
-- Byte-identical content across subjects (boilerplate) is attributed by a pre-reclaim baseline;
-  when it cannot be attributed the receipt says `UNVERIFIED(duplicate content)`.
+- Byte-identical content across subjects (boilerplate) is decided on the lineage graph alone:
+  if another *live* artifact holds the same content, no scan can say whose copy it found, and the
+  receipt says `UNVERIFIED(duplicate content)`. Every version of this rule that compared byte
+  counts before and after was timing-sensitive — a background segment flush moves the number —
+  and a saga killed and resumed mid-flight could reach a different verdict than a clean run on
+  identical data. A fact about the graph cannot move underneath a probe; a byte count can.

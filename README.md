@@ -104,19 +104,17 @@ verifier with no access to the lineage database.
 
 ## Install
 
-Not yet on PyPI. Until the 0.1.0 release is cut, install from source:
-
-```bash
-uv tool install git+https://github.com/Poojan6216/tombstone     # CLI: tombstone
-```
-
-After release the same thing is:
-
 ```bash
 uv tool install tombstone-erase            # CLI: tombstone
 uv pip install 'tombstone-erase[chroma,faiss,qdrant,pgvector,langchain]'   # store adapters
 uv pip install 'tombstone-erase[train]'    # the model leg (torch, transformers, peft)
 uv pip install 'tombstone-erase[mcp]'      # the MCP server
+```
+
+`pip install` works the same way. To run against unreleased main instead:
+
+```bash
+uv tool install git+https://github.com/Poojan6216/tombstone
 ```
 
 The core install pulls only `pydantic`, `cryptography` and `pyyaml` — every backend, the training

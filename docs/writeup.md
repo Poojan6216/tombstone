@@ -64,8 +64,11 @@ The lattice evaluates in a fixed order and the honesty lives in one rule: "store
 physically checked" is decided *before* "bytes not found", so a managed database can never come
 out `VERIFIED` by omission. A second rule handles boilerplate: when other subjects hold
 byte-identical chunks, a byte scan cannot tell whose copy it found, so the receipt says
-`UNVERIFIED(duplicate content)` unless a pre-reclaim baseline shows the subject's own copy went
-away.
+`UNVERIFIED(duplicate content)`. That verdict is read off the lineage graph — does another live
+artifact hold these bytes — and never off a count of matches before and against after. Counting
+was the first design and it was wrong: a background segment flush moves the number, so a saga
+killed and resumed could reach a different verdict than a clean run on identical data. A fact
+about the graph cannot move underneath a probe.
 
 ## The model is an artifact too
 

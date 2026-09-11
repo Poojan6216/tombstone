@@ -44,10 +44,14 @@ and by the padded fingerprint only, and says so.
 Physical probes look for two kinds of pattern. The artifact's own id string is present in the
 stored metadata of every record Tombstone wrote, so its absence means the record is gone. The
 content pattern (the fingerprint's float32 bytes, or a row's content hash) is what byte-identical
-copies from *other subjects* share — boilerplate paragraphs produce them. When lineage shows
-other live artifacts with the same bytes, the saga records a baseline count before reclaim and
-calls it residue only if the count did not drop; when it cannot attribute shared bytes it reports
-`UNVERIFIED(duplicate content)`, never `VERIFIED`.
+copies from *other subjects* share — boilerplate paragraphs produce them. So the two patterns
+decide different things. The id's absence is what makes an erasure `VERIFIED`. Content bytes that
+remain are attributed on the lineage graph: if another *live* artifact holds them, they are that
+artifact's, and the receipt reports `UNVERIFIED(duplicate content)` rather than `VERIFIED` or
+`RESIDUAL` — no scan can distinguish identical bytes, and the survivor must not be deleted. The
+saga still records the duplicate count before reclaim, but the count is evidence on the receipt,
+not the thing that decides: match counts move with a background segment flush, so deciding on
+them let a killed-and-resumed saga disagree with a clean run on identical data.
 
 ## Per backend
 
