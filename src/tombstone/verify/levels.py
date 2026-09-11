@@ -166,10 +166,17 @@ def assign(facts: Facts) -> ArtifactStatus:
         )
     # 5. physical capability (before 6: managed stores must be UNVERIFIED, not VERIFIED)
     if not facts.physical_supported:
+        # Two different situations reach this rule, and they need different words. A managed
+        # store cannot be read, and access would fix that. Duplicate content can be read
+        # perfectly well; the bytes simply belong to live records too, so no scan can say whose
+        # copy it found — no permission will ever change that, and nothing is wrong.
+        duplicates = float(facts.measurement_extra.get("live_duplicates", 0.0))
+        kind = "duplicate-content" if duplicates > 0 else "managed"
         return status(
             Outcome.UNVERIFIED,
             VerifyLevel.PHYSICAL,
-            f"physical UNVERIFIED-managed: {facts.physical_reason or 'store cannot be physically verified'}",
+            f"physical UNVERIFIED-{kind}: "
+            f"{facts.physical_reason or 'store cannot be physically verified'}",
             "physical_unsupported",
         )
     # 6. physical

@@ -72,21 +72,61 @@ def client_can_confirm(ctx: Context, trace_id: str, reason: str) -> bool:
     return True
 
 
+def _confirmation_message(t: Any, reason: str) -> str:
+    s = trace_summary(t)
+    stores = ", ".join(f"{k}×{v}" for k, v in sorted(s["per_store"].items()))
+    return (
+        f"Erase {s['artifacts']} artifacts for subject {s['subject']} (reason {reason!r})? "
+        f"Stores: {stores}. Lineage gaps: {len(s['gaps'])}. Third-party mentions: "
+        f"{s['third_party_hits']} (never erased, listed for review). This is destructive and "
+        "runs a suppress → reclaim → verify saga."
+    )
+
+
 def ask_confirmation(
     trace_id: str, reason: str, _ok: Annotated[bool, Resolve(client_can_confirm)]
 ) -> Elicit[ConfirmErase]:
     t = _rt().lineage.load_trace(trace_id)
     if t is None:
         raise ToolError(f"no trace {trace_id!r}; call tombstone.trace first")
-    s = trace_summary(t)
-    stores = ", ".join(f"{k}×{v}" for k, v in sorted(s["per_store"].items()))
-    message = (
-        f"Erase {s['artifacts']} artifacts for subject {s['subject']} (reason {reason!r})? "
-        f"Stores: {stores}. Lineage gaps: {len(s['gaps'])}. Third-party mentions: "
-        f"{s['third_party_hits']} (never erased, listed for review). This is destructive and "
-        "runs a suppress → reclaim → verify saga."
-    )
-    return Elicit(message=message, schema=ConfirmErase)
+    return Elicit(message=_confirmation_message(t, reason), schema=ConfirmErase)
+
+
+# The trace each pending confirmation was shown for, so the erase runs on exactly what the
+# operator approved rather than on whatever a second trace would find. Resolvers must be safe to
+# re-run, and this one is: the trace id is derived from (subject, scope, snapshot), so re-tracing
+# an unchanged graph yields the same id and overwrites the entry with itself.
+_SHOWN: dict[str, str] = {}
+
+
+def _shown_key(subject_hmac: str, reason: str) -> str:
+    return hashlib.sha256(f"{subject_hmac}\x00{reason}".encode()).hexdigest()
+
+
+def client_can_confirm_forget(ctx: Context, subject: str, reason: str) -> bool:
+    caps = ctx.client_capabilities
+    elicitation = caps.elicitation if caps is not None else None
+    has_form = elicitation is not None and (elicitation.form is not None or elicitation.url is None)
+    if not has_form:
+        raise ToolError(
+            "this client does not support form elicitation, so forget cannot be confirmed here "
+            "and nothing was changed. Run: "
+            f"tombstone forget {subject} --reason {reason}"
+        )
+    return True
+
+
+def ask_forget_confirmation(
+    subject: str, reason: str, _ok: Annotated[bool, Resolve(client_can_confirm_forget)]
+) -> Elicit[ConfirmErase]:
+    from tombstone.commands.trace import run_trace
+
+    try:
+        t, _ = run_trace(_rt(), subject)
+    except TombstoneError as e:
+        raise ToolError(str(e)) from e
+    _SHOWN[_shown_key(t.subject.hmac, reason)] = t.trace_id
+    return Elicit(message=_confirmation_message(t, reason), schema=ConfirmErase)
 
 
 # --- tools ----------------------------------------------------------------------------------
@@ -150,6 +190,55 @@ def tool_erase(
     }
 
 
+def tool_forget(
+    subject: str,
+    reason: str,
+    decision: Annotated[ElicitationResult[ConfirmErase], Resolve(ask_forget_confirmation)],
+) -> dict[str, Any]:
+    """Trace a subject and erase everything descending from them, in one step. Asks for explicit
+    confirmation first and erases exactly what that confirmation listed. On clients without
+    elicitation, use the CLI: tombstone forget <subject> --reason <r>."""
+    from tombstone.api import erase_traced
+    from tombstone.commands.trace import run_trace
+    from tombstone.model.artifacts import SubjectRef
+
+    runtime = _rt()
+    key = _shown_key(SubjectRef.from_raw(subject, runtime.pepper()).hmac, reason)
+    shown = _SHOWN.pop(key, None)
+    accepted = getattr(decision, "data", None)
+    if (
+        isinstance(decision, DeclinedElicitation)
+        or accepted is None
+        or not getattr(accepted, "confirm", False)
+    ):
+        t = runtime.lineage.load_trace(shown) if shown else None
+        return {
+            "resultType": "declined",
+            "summary": trace_summary(t) if t is not None else {"subject": "", "artifacts": 0},
+            "journal_written": False,
+        }
+    # Erase the trace the operator was shown, not a fresh one: a second trace could differ, and
+    # then the receipt would not describe what was approved. If the graph moved in between, the
+    # saga's own staleness check refuses rather than erasing the difference silently.
+    t = runtime.lineage.load_trace(shown) if shown else None
+    if t is None:  # a resolver that ran in another process (stateless HTTP): trace again
+        try:
+            t, _ = run_trace(runtime, subject)
+        except TombstoneError as e:
+            raise ToolError(str(e)) from e
+    try:
+        result = erase_traced(runtime, t, reason)
+    except TombstoneError as e:
+        raise ToolError(str(e)) from e
+    return {
+        "resultType": "receipt",
+        "exit_code": result.exit_code,
+        "receipt_id": result.receipt_id,
+        "counts": dict(result.counts),
+        "rendered": result.report,
+    }
+
+
 def tool_receipt(receipt_id: str) -> dict[str, Any]:
     """Return a receipt (statuses carry ids, stores, outcomes and measurements; never content)."""
     from tombstone.receipt.ledger import Ledger
@@ -176,13 +265,16 @@ def build(config: str | Path | None) -> MCPServer:
         instructions=(
             "Tombstone tracks where a data subject's data went (chunks, embeddings, caches, "
             "training examples, adapters), erases it everywhere, and returns a receipt that says "
-            "what was checked and what was not. erase is destructive and requires explicit "
-            "confirmation."
+            "what was checked and what was not. To act on a deletion request, call "
+            "tombstone.forget with the subject id: it traces, asks the operator to confirm what "
+            "it found, and erases exactly that. forget and erase are destructive and require "
+            "explicit confirmation; trace, verify, receipt and status change nothing."
         ),
         request_state_security=RequestStateSecurity(keys=[state_key], ttl=600.0),
     )
     server.tool(name="tombstone.trace")(tool_trace)
     server.tool(name="tombstone.verify")(tool_verify)
+    server.tool(name="tombstone.forget")(tool_forget)
     server.tool(name="tombstone.erase")(tool_erase)
     server.tool(name="tombstone.receipt")(tool_receipt)
     server.tool(name="tombstone.status")(tool_status)

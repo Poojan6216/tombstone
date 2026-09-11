@@ -115,6 +115,10 @@ journal lock serialises writes and a clean failure is preferred to an interleave
   byte-identical copies. It does not speak about files it could not read.
 - `UNVERIFIED-managed` means: the store could not be checked at that level from this role. It
   names the grant to ask for.
+- `UNVERIFIED-duplicate` means: the store was read fine, but the bytes that remain are held by
+  other live records too, so no scan can say whose copy it found. There is no grant to ask for
+  and nothing to fix — the subject's own record is gone, which the logical layer shows — and the
+  receipt says so rather than reporting the reassuring `VERIFIED` or the alarming `RESIDUAL`.
 - A receipt is a record of what was done and checked. It is not a legal instrument, and the
   vocabulary of assurance and regulatory compliance does not appear in any output of this tool;
   a CI check fails the build on it.

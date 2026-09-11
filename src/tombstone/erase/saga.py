@@ -752,9 +752,15 @@ class Saga:
             detail = _detail(worst, n_ok, n)
             note = ""
             if worst.outcome is Outcome.UNVERIFIED and worst.rule_id == "physical_unsupported":
-                note = "→ run VACUUM FULL / REINDEX from an owner role, then `tombstone verify --receipt`"
-                if g.store is not None and getattr(g.store, "kind", "") != "pgvector":
+                if _is_duplicate_content(worst):
+                    note = (
+                        "→ nothing to do: the bytes left are held by other live records, which "
+                        "must not be deleted. This subject's own copy is gone (logical)."
+                    )
+                elif g.store is not None and getattr(g.store, "kind", "") != "pgvector":
                     note = "→ grant this process access to the persisted index, then `tombstone verify --receipt`"
+                else:
+                    note = "→ run VACUUM FULL / REINDEX from an owner role, then `tombstone verify --receipt`"
             elif worst.outcome is Outcome.RESIDUAL and worst.level is VerifyLevel.MODEL:
                 note = "→ content still partially extractable. Options: full retrain, or a RESIDUAL receipt"
             rows.append(StoreRow(g.name, method[:34], level, label, detail, note))
@@ -808,9 +814,16 @@ def _worst(statuses: Sequence[Any]) -> Any:
     return sorted(statuses, key=lambda s: (_RANK[s.outcome], s.artifact.artifact_id))[0]
 
 
+def _is_duplicate_content(s: Any) -> bool:
+    """This artifact's bytes are shared with live records, rather than unreadable. Same rule,
+    different situation, and the operator must not be told to go fix database permissions for
+    something no permission can change."""
+    return float(s.measurement.get("live_duplicates", 0.0)) > 0
+
+
 def _label(s: Any) -> str:
     if s.outcome is Outcome.UNVERIFIED and s.rule_id == "physical_unsupported":
-        return "UNVERIFIED-managed"
+        return "UNVERIFIED-duplicate" if _is_duplicate_content(s) else "UNVERIFIED-managed"
     if s.outcome is Outcome.UNVERIFIED and s.rule_id == "lineage_gap":
         return "UNVERIFIED-lineage-gap"
     if s.outcome is Outcome.UNVERIFIED and s.rule_id == "dlq":

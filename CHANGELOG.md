@@ -6,7 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `tombstone forget <subject> --reason <id>`: trace, show what was found, ask once, erase. The
+  two-command path made a person copy a 26-character trace id between commands; the confirmation
+  is now a human answering a list of real artifacts instead of a `--confirm` flag.
+- A public Python API — `from tombstone import trace, forget` — so an erasure can run inside the
+  operator's own delete-account handler with no command at all. Both are resolved lazily, so
+  `import tombstone` still pulls in nothing heavy.
+- `tombstone.forget` on the MCP server: one tool call from a subject id, with the same
+  elicitation confirmation `tombstone.erase` requires, and it erases exactly the set that
+  confirmation listed rather than re-tracing afterwards.
+- `tombstone ui`: a local page for the people who receive deletion requests and do not use a
+  terminal. Loopback only, no cookies, and every API call must carry a per-run token sent in a
+  request header, so a page the operator is browsing cannot drive their deletion tool. It
+  refuses lineage gaps, requires a reason, and will not erase against a view that has gone stale.
+
 ### Fixed
+- The receipt labelled byte-identical duplicate content `UNVERIFIED-managed` and told the
+  operator to grant file access or run `VACUUM FULL` — a remedy that cannot help, because the
+  store was read perfectly well and the remaining bytes belong to other live records. That case
+  now reads `UNVERIFIED-duplicate` and says there is nothing to fix. The rule id, outcome and
+  level are unchanged, so replay and independent verification are unaffected.
 - Chroma: the physical probe on Linux CI found an erased vector in the rewritten segment's
   `data_level0.bin` after a clean reclaim. chroma-hnswlib persists the index at its allocated
   capacity from a `malloc`'d buffer it never clears, and does so on every open until the index

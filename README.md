@@ -137,19 +137,78 @@ docs = stamp(docs, subject_id="S-0417", source_id="crm/417.pdf", scope="default"
 index(docs, record_manager, vs, cleanup="incremental", source_id_key="source")  # stock LangChain
 ```
 
+Then, when a deletion request arrives:
+
 ```bash
-tombstone trace --subject S-0417
+tombstone forget S-0417 --reason dsr-2026-0912    # traces, shows what it found, asks once, erases
+```
+
+```text
+47 things exist because of subject hmac:99d5…83ec   (raw id never stored)
+
+  chroma:kb-v2                     10
+  docs                             15
+  exact-cache                       1
+  faiss:kb-v1                      10
+  ft-dataset                       10
+  semantic-cache                    1
+
+  kinds: cache×2, chunk×10, embed×20, source×5, train×10
+  lineage gaps: none
+
+erase all 47 of these? this cannot be undone  [y/N]
+```
+
+The pieces are still there when you want them, and everything else the tool does:
+
+```bash
+tombstone trace --subject S-0417                  # look without touching anything
 tombstone erase --trace <trace-id> --reason dsr-2026-0912 --confirm
 tombstone receipt
 tombstone verify --receipt .tombstone/receipts/<id>.json --public-key .tombstone/keys/ed25519.pub   # independent check
 tombstone replay                                  # re-derive every receipt from the journal
+tombstone ui                                      # a local page for whoever handles the request
 tombstone mcp                                     # MCP server; erase requires an elicitation confirmation
 ```
 
+### From your own code
+
+A deletion request arrives in your product, not in a terminal — a customer clicks "delete my
+account", a ticket lands in a queue. So the erasure belongs in the handler you already have:
+
+```python
+from tombstone import trace, forget
+
+held = trace("S-0417")                       # what do we hold? reads only
+print(held.count, held.by_store, held.gaps)
+
+result = forget("S-0417", reason=f"dsr-{ticket_id}")    # destructive
+if not result.ok:
+    alert_privacy_team(result.report)        # something could not be confirmed; it says what
+```
+
+Calling `forget` is the confirmation — a call written in your own source is already a deliberate
+act, and a boolean people paste without reading protects nobody. It returns the same receipt the
+CLI writes, `tombstone replay` re-derives it identically, and it raises rather than reporting
+"nothing to delete" for a subject it has no lineage for. Both functions resolve lazily, so
+`import tombstone` still pulls in nothing heavy.
+
+### For whoever actually handles the request
+
+```bash
+tombstone ui        # http://127.0.0.1:7878 — search a person, see what is held, erase, read the receipt
+```
+
+Support and legal receive the DSR and do not use a terminal. The page binds loopback only, and
+every request to it must carry a per-run token that is printed with the URL, so a page the
+operator happens to be browsing cannot drive their deletion tool. It refuses lineage gaps, asks
+for a reason and writes the same journal and receipt as the CLI.
+
 ### Driving it from an AI assistant (MCP)
 
-`tombstone mcp` exposes five tools — `tombstone.trace`, `tombstone.verify`, `tombstone.erase`,
-`tombstone.receipt`, `tombstone.status` — over stdio or streamable HTTP. Point any MCP client at it:
+`tombstone mcp` exposes six tools — `tombstone.forget`, `tombstone.trace`, `tombstone.verify`,
+`tombstone.erase`, `tombstone.receipt`, `tombstone.status` — over stdio or streamable HTTP. Point
+any MCP client at it:
 
 ```json
 {
@@ -162,9 +221,11 @@ tombstone mcp                                     # MCP server; erase requires a
 }
 ```
 
-The assistant can then trace a subject, inspect a receipt, or ask for coverage — and **`erase`
-cannot execute without an explicit confirmation** carried in the request, on every protocol
-revision. An agent cannot talk its way into deleting your data.
+The assistant can then trace a subject, inspect a receipt, or ask for coverage, and
+`tombstone.forget` does the whole thing from a subject id in one call. **Neither `forget` nor
+`erase` can execute without an explicit confirmation** carried in the request, on every protocol
+revision, and `forget` erases exactly the set that confirmation listed. An agent cannot talk its
+way into deleting your data.
 
 One thing this does not remove: Tombstone can only trace what it saw arrive. If the app was not
 wrapped at ingest, `trace` reports a lineage gap and refuses to claim an erasure it cannot back

@@ -335,3 +335,110 @@ def test_stdio_stdout_is_only_jsonrpc(tmp_path: Path, monkeypatch: pytest.Monkey
         msg = json.loads(ln)
         assert msg.get("jsonrpc") == "2.0"
     assert any("tombstone.erase" in ln for ln in lines), lines[-1][:200]
+
+
+def _forget_via(session: Any, subject: str, answer: Any):
+    """Drive tombstone.forget through either transport shape, as _erase_via does for erase."""
+
+    async def go():  # noqa: ANN202
+        import mcp_types as t
+
+        args = {"subject": subject, "reason": "dsr-mcp-forget"}
+        res = await session.call_tool("tombstone.forget", args, allow_input_required=True)
+        if isinstance(res, t.InputRequiredResult):
+            responses = {}
+            for key, req in res.input_requests.items():
+                assert isinstance(req, t.ElicitRequest)
+                assert "artifacts for subject hmac:" in req.params.message
+                responses[key] = answer(req.params)
+            res2 = await session.call_tool(
+                "tombstone.forget",
+                args,
+                input_responses=responses,
+                request_state=res.request_state,
+                allow_input_required=True,
+            )
+            return res, res2
+        return None, res
+
+    return go
+
+
+@pytest.mark.timeout(600)
+def test_forget_takes_a_subject_and_still_requires_confirmation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One tool call instead of trace-then-erase, with the same confirmation contract: a decline
+    leaves the journal empty, and the message names what is about to go."""
+    import mcp_types as t
+
+    from tombstone.mcp.server import build_server
+
+    monkeypatch.chdir(tmp_path)
+    h, _trace = _setup(tmp_path)
+    server = build_server(h["cfg_path"])
+    journal = Journal(tmp_path / ".tombstone" / "journal.jsonl")
+
+    async def declined_cb(context, params):  # noqa: ANN001, ANN202
+        return t.ElicitResult(action="decline")
+
+    async def run_decline():  # noqa: ANN202
+        async for session in _session(server, declined_cb):
+            _first, res = await _forget_via(
+                session, "S-0006", lambda p: t.ElicitResult(action="decline")
+            )()
+            return _content_json(res), getattr(res, "is_error", False)
+
+    body, is_error = anyio.run(run_decline)
+    assert body.get("resultType") == "declined" or is_error, body
+    assert journal.records() == [], "a declined confirmation must leave the journal empty"
+
+    async def accept_cb(context, params):  # noqa: ANN001, ANN202
+        return t.ElicitResult(action="accept", content={"confirm": True})
+
+    async def run_accept():  # noqa: ANN202
+        async for session in _session(server, accept_cb):
+            _first, res = await _forget_via(
+                session,
+                "S-0006",
+                lambda p: t.ElicitResult(action="accept", content={"confirm": True}),
+            )()
+            return _content_json(res)
+
+    body = anyio.run(run_accept)
+    assert body.get("resultType") == "receipt", body
+    assert body["exit_code"] in (0, 2)
+    assert body["receipt_id"]
+    assert len([r for r in journal.records() if r.type == Journal.SAGA_START]) == 1
+    # ids, counts and outcomes only — never content
+    dumped = json.dumps(body)
+    for d in h["corpus"]:
+        if d.subject == "S-0006" and d.canary:
+            assert d.canary.token not in dumped
+
+
+@pytest.mark.timeout(600)
+def test_forget_without_elicitation_gets_the_cli_command_not_an_erasure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tombstone.mcp.server import build_server
+
+    monkeypatch.chdir(tmp_path)
+    h, _trace = _setup(tmp_path)
+    server = build_server(h["cfg_path"])
+    journal = Journal(tmp_path / ".tombstone" / "journal.jsonl")
+
+    async def run():  # noqa: ANN202
+        async for session in _session(server, None, client_caps_elicit=False):
+            return await session.call_tool(
+                "tombstone.forget",
+                {"subject": "S-0006", "reason": "dsr-mcp-forget"},
+                allow_input_required=True,
+            )
+
+    res = anyio.run(run)
+    text = json.dumps(_content_json(res)) + str(getattr(res, "content", ""))
+    assert getattr(res, "is_error", False) or "elicitation" in text.lower()
+    # the fallback it names must be the one-command path, not the two-command one
+    assert "tombstone forget" in text and "--trace" not in text, text
+    assert journal.records() == []

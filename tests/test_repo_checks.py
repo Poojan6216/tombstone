@@ -163,7 +163,14 @@ def test_no_telemetry_and_no_hosted_components() -> None:
     Tombstone runs entirely on the operator's machine: the only hosts it ever talks to are the
     operator's own stores, named in their own config. So no analytics SDK may be imported, and no
     URL may be hard-coded outside a docstring citation.
+
+    One exception, and it is the opposite of phoning home: ``tombstone ui`` serves a page to the
+    operator's own browser and prints its address. Loopback hosts are allowed anywhere; the bare
+    ``http://`` fragment an f-string leaves behind is allowed only in that server, whose bind
+    address is pinned to loopback at the bottom of this test. Anything naming a remote host still
+    fails, here and in any file added later.
     """
+    ui_server = Path("src/tombstone/ui/server.py")
     offenders: list[str] = []
     urls: list[str] = []
     for f in sorted((ROOT / "src" / "tombstone").rglob("*.py")):
@@ -180,16 +187,38 @@ def test_no_telemetry_and_no_hosted_components() -> None:
             and isinstance(node.body[0].value, ast.Constant)
             and isinstance(node.body[0].value.value, str)
         }
+        rel = f.relative_to(ROOT)
         for node in ast.walk(tree):
             if (
                 isinstance(node, ast.Constant)
                 and isinstance(node.value, str)
                 and id(node) not in docstrings
                 and ("http://" in node.value or "https://" in node.value)
+                and not _is_loopback(node.value, rel == ui_server)
             ):
-                urls.append(f"{f.relative_to(ROOT)}:{node.lineno}: {node.value[:60]}")
+                urls.append(f"{rel}:{node.lineno}: {node.value[:60]}")
     assert not offenders, "telemetry SDK imported: " + "; ".join(offenders)
     assert not urls, "hard-coded URL outside a docstring: " + "; ".join(urls)
+    # the exception above is only sound while the UI cannot be served off the loopback interface
+    from tombstone.ui.server import HOST, build_server
+
+    assert HOST == "127.0.0.1", HOST
+    httpd, _token = build_server(None, port=0)
+    try:
+        assert httpd.server_address[0] == "127.0.0.1", httpd.server_address
+    finally:
+        httpd.server_close()
+    ui_src = (ROOT / ui_server).read_text(encoding="utf-8")
+    assert "0.0.0.0" not in ui_src, "the UI must not offer a non-loopback bind address"
+
+
+def _is_loopback(value: str, in_ui_server: bool) -> bool:
+    """A URL constant that cannot reach anything but this machine."""
+    for prefix in ("http://127.0.0.1", "http://localhost", "http://[::1]"):
+        if value.startswith(prefix):
+            return True
+    # f"http://{HOST}:{port}" leaves "http://" as its own constant; only the UI server may do that
+    return in_ui_server and value in {"http://", "http://localhost:"}
 
 
 def test_chroma_phone_home_stays_disabled() -> None:
