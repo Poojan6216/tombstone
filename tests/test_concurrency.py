@@ -16,7 +16,7 @@ from tests.conftest import requires_faiss, requires_langchain
 from tombstone.commands.erase import run_erase
 from tombstone.commands.trace import run_trace
 from tombstone.erase.journal import Journal
-from tombstone.errors import LockTimeout, SagaError
+from tombstone.errors import LockTimeout, PinMismatch, SagaError
 from tombstone.receipt.ledger import Ledger
 
 pytestmark = [requires_langchain, requires_faiss]
@@ -37,12 +37,18 @@ def test_twenty_concurrent_sagas_valid_chain_or_clean_failure(
     outcomes: list[str] = []
     lock = threading.Lock()
 
+    # PinMismatch counts as a clean failure here, and deliberately so. Suppressing a subject
+    # rewrites the dataset manifest, which changes its hash, so a second saga that pinned before
+    # that write finds the manifest moved and refuses. That refusal happens in _preflight(),
+    # before the journal is touched and before anything is modified — the same shape as a lock
+    # timeout: the erasure did not start, so there is no half-deleted state. What the test forbids
+    # is an exception that leaves work half-done, not the tool declining to start.
     def go(i: int) -> None:
         s = subs[i % len(subs)]
         try:
             code, _t, _d = run_erase(rt, traces[s], f"c-{i}", confirm=True, retry=i >= len(subs))
             res = f"ok:{code}"
-        except (LockTimeout, SagaError) as e:
+        except (LockTimeout, SagaError, PinMismatch) as e:
             res = f"clean:{type(e).__name__}"
         except Exception as e:  # noqa: BLE001
             # keep the traceback: an UNCLEAN outcome is a race, and the frame is the whole clue

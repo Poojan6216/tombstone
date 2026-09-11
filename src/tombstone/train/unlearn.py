@@ -38,6 +38,7 @@ from tombstone.train.finetune import (
     load_adapter_model,
     train_lora,
 )
+from tombstone.util import atomic_write_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,7 +205,7 @@ def approximate_unlearn(
         "wall_clock_s": round(time.time() - t0, 2),
         "adapter_hash": adapter_hash(out_dir),
     }
-    (out_dir / "tombstone.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
+    atomic_write_text(out_dir / "tombstone.json", json.dumps(meta, indent=1, sort_keys=True))
     return meta
 
 

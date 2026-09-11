@@ -29,7 +29,14 @@ from tombstone.stores.base import (
     ProbeSet,
     ReclaimResult,
 )
-from tombstone.util import canonical_json, content_hash, derived_ulid, sha256_hex, stable_int_hash
+from tombstone.util import (
+    atomic_write_text,
+    canonical_json,
+    content_hash,
+    derived_ulid,
+    sha256_hex,
+    stable_int_hash,
+)
 
 MANIFEST_VERSION = 1
 
@@ -113,7 +120,7 @@ def build_dataset(
         "examples": sorted(entries, key=lambda e: e["id"]),
     }
     manifest["manifest_hash"] = manifest_hash(manifest)
-    manifest_path.write_text(json.dumps(manifest, indent=1, sort_keys=True), encoding="utf-8")
+    atomic_write_text(manifest_path, json.dumps(manifest, indent=1, sort_keys=True))
     lineage.put_pin(
         ManifestPin(store_name, manifest["manifest_hash"], len(entries)), "dataset build"
     )
@@ -172,7 +179,11 @@ class DatasetStore:
 
     def _write_manifest(self, m: dict[str, Any]) -> str:
         m["manifest_hash"] = manifest_hash(m)
-        self.manifest_path.write_text(json.dumps(m, indent=1, sort_keys=True), encoding="utf-8")
+        # Atomic: suppress and reclaim rewrite this while other sagas read it. A truncating write
+        # let a reader see an empty file (JSONDecodeError mid-erasure under twenty concurrent
+        # sagas) or, worse, a partial one that still parsed — which fails the manifest_hash check
+        # and reports PinMismatch, accusing the operator of editing the manifest by hand.
+        atomic_write_text(self.manifest_path, json.dumps(m, indent=1, sort_keys=True))
         return str(m["manifest_hash"])
 
     def pin(self) -> ManifestPin:

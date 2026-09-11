@@ -41,7 +41,7 @@ from tombstone.receipt.render import ReceiptView, SemanticRow, StoreRow
 from tombstone.receipt.sign import load_private_key, public_key_hex, sign_bytes
 from tombstone.registry import Runtime
 from tombstone.stores.base import ErasableStore
-from tombstone.util import canonical_json, new_ulid, utc_ms
+from tombstone.util import atomic_write_text, canonical_json, new_ulid, utc_ms
 from tombstone.verify.levels import Facts, assign
 from tombstone.verify.logical import build_probe_set
 
@@ -421,7 +421,8 @@ class Saga:
         receipt = receipt.with_signature(sign_bytes(key, payload), public_key_hex(key))
         self.rt.inst.receipts_dir.mkdir(parents=True, exist_ok=True)
         path = self.rt.inst.receipts_dir / f"{receipt.receipt_id}.json"
-        path.write_text(canonical_json(receipt.to_dict()) + "\n", encoding="utf-8")
+        # the receipt is the deliverable; never let anything observe a half-written one
+        atomic_write_text(path, canonical_json(receipt.to_dict()) + "\n")
         self.ledger.append(receipt)
         self.journal.saga_end(self.saga_id, receipt.receipt_id)
         self._purge_probes(statuses)

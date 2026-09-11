@@ -28,6 +28,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from tombstone.train._torch import device, load_base, require_torch
+from tombstone.util import atomic_write_text
 
 MANIFEST = "serving.json"
 
@@ -56,9 +57,10 @@ def write_serving_manifest(
         "excluded": sorted(set(exclude)),
         "shard_hashes": {d: adapter_hash(adapters_dir / d) for d in shard_dirs},
     }
-    (serving_dir / MANIFEST).write_text(json.dumps(meta, indent=1, sort_keys=True))
-    (serving_dir / "adapter_config.json").write_text(
-        json.dumps({"tombstone_ensemble": True, "shards": shard_dirs})
+    atomic_write_text(serving_dir / MANIFEST, json.dumps(meta, indent=1, sort_keys=True))
+    atomic_write_text(
+        serving_dir / "adapter_config.json",
+        json.dumps({"tombstone_ensemble": True, "shards": shard_dirs}),
     )
     return meta
 

@@ -19,7 +19,7 @@ from typing import Any
 
 from tombstone.train._torch import device, load_base, require_torch
 from tombstone.train.dataset import DatasetStore, Example
-from tombstone.util import sha256_hex
+from tombstone.util import atomic_write_text, sha256_hex
 
 DEFAULT_TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj")
 
@@ -125,7 +125,7 @@ def train_lora(
         "device": device(),
         "adapter_hash": adapter_hash(out_dir),
     }
-    (out_dir / "tombstone.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
+    atomic_write_text(out_dir / "tombstone.json", json.dumps(meta, indent=1, sort_keys=True))
     # detach the adapter from the shared base so the next shard starts clean
     pm.unload() if hasattr(pm, "unload") else None
     return meta
