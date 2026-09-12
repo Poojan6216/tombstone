@@ -120,6 +120,17 @@ uv tool install git+https://github.com/Poojan6216/tombstone
 The core install pulls only `pydantic`, `cryptography` and `pyyaml` — every backend, the training
 leg and the MCP server are extras, so `import tombstone` stays fast and drags in nothing heavy.
 
+**Needs Python 3.12 or newer.** On an older interpreter `pip` does not say so plainly — it
+reports `Could not find a version that satisfies the requirement tombstone-erase (from versions:
+none)`, which reads as "this package does not exist" when it means "none of its releases run on
+your Python". The line above it is the real message: `Ignored the following versions that require
+a different python version`. `uv tool install` sidesteps it by fetching a suitable interpreter
+itself; with pip, point it at a 3.12+ one:
+
+```bash
+python3.12 -m pip install tombstone-erase        # or: pip install --python 3.12 tombstone-erase
+```
+
 Ten-minute path (scripted in `tests/test_first_use.py`):
 
 ```bash
