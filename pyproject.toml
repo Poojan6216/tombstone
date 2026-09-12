@@ -44,7 +44,7 @@ train = [
   # SECURITY.md rather than silently shipped as if it were equivalent.
   "torch>=2.6; sys_platform != 'darwin' or platform_machine != 'x86_64'",
   "torch>=2.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-  "transformers>=4.45,<5",
+  "transformers>=4.45,<6",
   "peft>=0.13",
   "accelerate>=1.0",
   "numpy>=1.24",
