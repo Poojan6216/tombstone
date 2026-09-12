@@ -131,6 +131,17 @@ itself; with pip, point it at a 3.12+ one:
 python3.12 -m pip install tombstone-erase        # or: pip install --python 3.12 tombstone-erase
 ```
 
+**The PyPI name is `tombstone-erase`, not `tombstone`.** `pip install tombstone` fetches an
+unrelated project (a directory-watching utility). Both install a top-level `tombstone` module, so
+an environment holding the two ends up with whichever was installed last and **pip warns about
+none of it** — install this one second and it works; install it first and `tombstone --version`
+starts raising `ImportError` with both still listed in `pip list`. If that happens:
+
+```bash
+pip list | grep -i tombstone     # if plain `tombstone` is there, it is not this project
+pip uninstall tombstone && pip install --force-reinstall tombstone-erase
+```
+
 Ten-minute path (scripted in `tests/test_first_use.py`):
 
 ```bash
