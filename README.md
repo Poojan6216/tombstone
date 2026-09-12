@@ -157,6 +157,35 @@ docs = stamp(docs, subject_id="S-0417", source_id="crm/417.pdf", scope="default"
 index(docs, record_manager, vs, cleanup="incremental", source_id_key="source")  # stock LangChain
 ```
 
+### Already have a database full of vectors?
+
+Everything else here needs lineage, and lineage only runs forward. If you have three years of
+embeddings already in Chroma and a deletion request in your inbox this morning, start with the
+one command that needs no config, no integration and no prior installation:
+
+```bash
+tombstone scan            # or: tombstone scan /path/to/your/store
+```
+
+```text
+  chroma:customer-kb   ./chroma_db
+    entries            47,203
+    tombstone stamps   0/200 sampled (0%)  — nothing here arrived through Tombstone
+    shared fingerprints 16/200 sampled (8%) — byte-identical to another entry
+    byte-level proof   available
+
+If a deletion request arrived today:
+  ✗ nothing here can be traced to a person by this tool.
+  ✓ if your application records which ids belong to whom, you can still delete by id
+  ! some entries are byte-identical to others, so no scan could attribute them
+    to one person even with full lineage. That is a fact about the data.
+```
+
+It issues no insert, update or delete. It does not claim your files are untouched, because
+opening a store is enough to make some engines write to their own files — Chroma rewrites its
+index header on every open, by any client — so the scan takes a census before and after and
+tells you exactly what moved.
+
 Then, when a deletion request arrives:
 
 ```bash

@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `tombstone scan`: point it at a store this tool has never touched and it reports what a
+  deletion request could and could not establish there today — entry count, how much of a sample
+  carries a Tombstone stamp, whether byte-level proof is possible at all, and how much of the
+  data is byte-identical to something else and therefore unattributable even with full lineage.
+  No config, no lineage, no integration. Every other command needs lineage, and lineage only runs
+  forward; this is the one that gives an answer to somebody who has the problem now.
+  It issues no insert, update or delete, and it does not claim more than that: opening a store is
+  enough to make some engines write to their own files, so the scan takes a census before and
+  after and reports what moved. `ChromaStore(read_only=True)` skips the segment scrub for the
+  same reason — harmless as that write is, a command that says it only looks has to only look.
+
 ## [0.1.0] - 2026-09-11
 
 First release. Built end to end against a written specification, with every measured number

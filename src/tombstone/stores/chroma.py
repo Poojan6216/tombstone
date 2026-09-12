@@ -98,6 +98,7 @@ class ChromaStore(VectorBackendBase):
         collection: str = "tombstone-kb",
         embedding_model: str = "",
         dims: int = 0,
+        read_only: bool = False,
     ) -> None:
         super().__init__(name, embedding_model, dims)
         import chromadb
@@ -118,7 +119,12 @@ class ChromaStore(VectorBackendBase):
         # files (see the module docstring). Take that first use now, then zero what it wrote
         # beyond the live elements, so an open never leaves memory contents on disk.
         self._scrubbed_segments: set[str] = set()
-        if VerifyLevel.PHYSICAL in self.capabilities:
+        self.read_only = read_only
+        # `tombstone scan` looks at a store it was not asked to change, so it must not take even
+        # this repair: zeroing the dead slots is harmless and privacy-improving, but it is still
+        # a write to somebody's production files, and a command that says it only reads has to
+        # mean it. The scan reports what it found instead.
+        if VerifyLevel.PHYSICAL in self.capabilities and not read_only:
             with contextlib.suppress(Exception):
                 self._coll.count()
             self._scrub_unused_slots()
