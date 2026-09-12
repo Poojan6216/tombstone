@@ -112,7 +112,7 @@ class Runtime:
     def build_store(self, sc: StoreConfig, dims: int | None = None) -> ErasableStore:
         kind = sc.kind
         emb_dims = dims
-        if kind in {"chroma", "faiss", "qdrant", "pgvector"} and emb_dims is None:
+        if kind in {"chroma", "faiss", "qdrant", "pgvector", "pinecone"} and emb_dims is None:
             assert sc.embedding is not None
             emb_dims = self.embedder(sc.embedding).dims
         try:
@@ -145,6 +145,21 @@ class Runtime:
                     collection=sc.collection or "kb",
                     embedding_model=sc.embedding or "",
                     dims=emb_dims or 0,
+                )
+            if kind == "pinecone":
+                import os
+
+                from tombstone.stores.pinecone import PineconeStore
+
+                assert sc.index is not None
+                return PineconeStore(
+                    sc.name,
+                    index=sc.index,
+                    api_key=os.environ.get(sc.api_key_env or "PINECONE_API_KEY", ""),
+                    namespace=sc.namespace or "",
+                    embedding_model=sc.embedding or "",
+                    dims=emb_dims or 0,
+                    host=sc.host or "",
                 )
             if kind == "pgvector":
                 from tombstone.stores.pgvector import PgVectorStore

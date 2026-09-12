@@ -76,7 +76,10 @@ Every number below is produced by a committed command from a committed JSON file
   extractability and can be reversed by light continued training. Exact shard retraining avoids
   this only if the dataset was sharded by subject *before* training (7.6).
 - **Managed databases cannot be physically verified** without maintenance rights. The receipt
-  says `UNVERIFIED-managed`, and that is the correct answer.
+  says `UNVERIFIED-managed`, and that is the correct answer. The Pinecone adapter is the clearest
+  case: it traces and suppresses exactly as the others do, and states plainly that the stored
+  bytes were never examined, because the service exposes no way to examine them. It has been
+  tested against an in-process fake of the client, **not against a live Pinecone index**.
 - **Backups, snapshots, replicas, WAL and provider-side logs are out of scope** and always listed
   as such (7.7).
 - **A receipt checked against its own key proves it was not altered, not who wrote it.** The
@@ -106,7 +109,7 @@ verifier with no access to the lineage database.
 
 ```bash
 uv tool install tombstone-erase            # CLI: tombstone
-uv pip install 'tombstone-erase[chroma,faiss,qdrant,pgvector,langchain]'   # store adapters
+uv pip install 'tombstone-erase[chroma,faiss,qdrant,pgvector,pinecone,langchain]'   # store adapters
 uv pip install 'tombstone-erase[train]'    # the model leg (torch, transformers, peft)
 uv pip install 'tombstone-erase[mcp]'      # the MCP server
 ```

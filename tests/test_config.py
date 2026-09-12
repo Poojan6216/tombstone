@@ -84,8 +84,11 @@ MALFORMED: list[tuple[str, str, list[str]]] = [
         ["stores.0", "line 5", "embedding"],
     ),
     (
+        # this case used "pinecone" until pinecone became a real backend, which is exactly the
+        # trap: pick a kind nobody will plausibly implement, or the test quietly stops testing
+        # what it says it does
         "store of unknown kind",
-        GOOD.replace("kind: chroma", "kind: pinecone"),
+        GOOD.replace("kind: chroma", "kind: notarealvectordb"),
         ["stores.0.kind", "line 5"],
     ),
     (

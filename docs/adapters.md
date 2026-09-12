@@ -76,6 +76,30 @@ reports `{LOGICAL}` and the receipt shows `UNVERIFIED-managed` — that is corre
 | semantic | `query()` for the drift protocol | drift vs same-cluster control, reported only |
 | model | extraction and MIA (`probe_model`) | canaries not extractable, MIA at chance |
 
+## Managed services: the adapter that cannot look
+
+`src/tombstone/stores/pinecone.py` is the reference for a backend running on somebody else's
+machines. There is no persist directory, no snapshot, no file-read API, so `probe_physical`
+raises `NotSupported` and `capabilities` is `{LOGICAL}` — and the receipt says
+`UNVERIFIED-managed`. Three rules that adapter follows, and yours should:
+
+1. **Never return `found=False` because you could not look.** "I checked and it is gone" and "I
+   cannot check" are different answers. Only one of them is true for a managed service, and
+   returning the wrong one turns the tool into the thing it exists to replace.
+2. **Say what the operator is actually relying on.** The reason string names the vendor's own
+   deletion commitment as the remaining assurance, rather than implying a measurement.
+3. **Wait for eventual consistency, and report the wait.** A hosted index can keep returning a
+   vector for a while after a successful delete. Probing immediately would report a residue that
+   is really propagation delay. Suppress and reclaim both settle before returning and put the
+   elapsed time in the measurement.
+
+**On testing an adapter you cannot reach.** The Pinecone adapter is exercised against an
+in-process fake (`tests/_pinecone_fake.py`) that reproduces the client's keyword-only signatures
+and its eventual consistency. That proves the adapter is self-consistent and that the settle
+logic works; it is **not** evidence about the live service, because a fake written alongside the
+adapter can only encode its author's beliefs. Until it has been run against a real index, treat
+it as unverified against Pinecone and say so wherever it is described.
+
 ## Registering the adapter
 
 1. Add a `kind` to `StoreKind` in `src/tombstone/config.py` and its required keys in

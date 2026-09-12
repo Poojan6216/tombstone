@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Pinecone adapter** (`pip install 'tombstone-erase[pinecone]'`) — the first backend whose
+  stored bytes nobody can examine. It traces, suppresses and reclaims exactly as the self-hosted
+  adapters do, reports `{LOGICAL}` and nothing more, and `probe_physical` *raises* rather than
+  returning "not found": "I checked and it is gone" and "I cannot check" are different answers,
+  and only the second is true of a managed service. The receipt says `UNVERIFIED-managed` and
+  names the vendor's own deletion commitment as the remaining assurance instead of implying a
+  measurement. Suppress and reclaim both wait for the service to make the change visible before
+  returning — a hosted index keeps answering with a vector for a while after a successful delete,
+  and probing immediately would report propagation delay as residue — and the settle time goes in
+  the measurement.
+  Tested against an in-process fake of the client that reproduces its keyword-only signatures and
+  its eventual consistency. That is not evidence about the live service, and the README, the
+  adapter docs and the module docstring all say so: **it has not yet been run against a real
+  Pinecone index.**
 - `tombstone scan`: point it at a store this tool has never touched and it reports what a
   deletion request could and could not establish there today — entry count, how much of a sample
   carries a Tombstone stamp, whether byte-level proof is possible at all, and how much of the

@@ -43,6 +43,7 @@ StoreKind = Literal[
     "pgvector",
     "qdrant",
     "faiss",
+    "pinecone",
     "cache_exact",
     "cache_semantic",
     "dataset",
@@ -64,6 +65,12 @@ class StoreConfig(_Strict):
     collection: str | None = None
     url: str | None = None
     embedding: str | None = None
+    # managed backends: the key is read from the environment by default and is never written to
+    # lineage, a receipt or a log — see PineconeStore
+    index: str | None = None
+    namespace: str | None = None
+    api_key_env: str | None = None
+    host: str | None = None
     # caches
     backing: str | None = None
     # dataset / adapter
@@ -91,6 +98,7 @@ class StoreConfig(_Strict):
             "faiss": ["path"],
             "qdrant": ["path|url"],
             "pgvector": ["dsn", "table"],
+            "pinecone": ["index"],
             "cache_exact": ["path"],
             "cache_semantic": ["backing"],
             "dataset": ["manifest"],

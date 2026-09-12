@@ -50,15 +50,16 @@ train = [
   "numpy>=1.24",
 ]
 mcp = ["mcp>=1.10"]
+pinecone = ["pinecone>=6"]
 bench = [
   "sentence-transformers>=3,<6",
   "matplotlib>=3.8",
   "datasets>=2.19",
   "numpy>=1.24",
-  "tombstone-erase[pgvector,qdrant,chroma,faiss,langchain,train,mcp]",
+  "tombstone-erase[pgvector,qdrant,chroma,faiss,pinecone,langchain,train,mcp]",
 ]
 inversion = ["vec2text>=0.0.13"]
-all = ["tombstone-erase[pgvector,qdrant,chroma,faiss,langchain,train,mcp,bench]"]
+all = ["tombstone-erase[pgvector,qdrant,chroma,faiss,pinecone,langchain,train,mcp,bench]"]
 
 [project.scripts]
 tombstone = "tombstone.cli:main"
@@ -152,7 +153,7 @@ module = [
   "chromadb.*", "faiss.*", "qdrant_client.*", "pgvector.*", "psycopg.*",
   "langchain_core.*", "langchain_classic.*", "langchain_text_splitters.*", "sqlalchemy.*",
   "torch.*", "transformers.*", "peft.*", "accelerate.*", "datasets.*",
-  "sentence_transformers.*", "mcp.*", "numpy.*", "matplotlib.*", "vec2text.*",
+  "sentence_transformers.*", "mcp.*", "numpy.*", "matplotlib.*", "vec2text.*", "pinecone.*",
   "langchain_community.*", "pgserver.*", "testcontainers.*", "networkx.*",
 ]
 ignore_missing_imports = true
