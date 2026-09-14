@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-13
+
 ### Added
 - **Pinecone adapter** (`pip install 'tombstone-erase[pinecone]'`) — the first backend whose
   stored bytes nobody can examine. It traces, suppresses and reclaims exactly as the self-hosted
@@ -74,7 +76,22 @@ generated from a committed command into `RESULTS.md`.
   request header, so a page the operator is browsing cannot drive their deletion tool. It
   refuses lineage gaps, requires a reason, and will not erase against a view that has gone stale.
 
+### Changed
+- **Python 3.11 is now supported** (`requires-python = ">=3.11"`). It always worked — there is no
+  3.12-only syntax or stdlib use anywhere in the package, and all 329 tests pass on 3.11 — but the
+  floor said 3.12 and pip therefore refused to install, reporting "Could not find a version that
+  satisfies the requirement", which reads as "this package does not exist". The classifiers had
+  been advertising 3.11 and 3.13 support the whole time, so the metadata was contradicting itself.
+  ruff and mypy now target 3.11 and CI runs the suite on it, so the floor is enforced rather than
+  merely declared.
+
 ### Fixed
+- The nightly benchmark had never once completed. It asked for `timeout-minutes: 720`, which
+  GitHub silently ignores — a hosted job is killed at six hours whatever you request. The residue
+  leg alone took 5h45m, so the unlearning leg was cancelled at epoch 18/20 three nights running
+  and nobody noticed, because a cancelled job renders grey rather than red. The two legs are
+  independent and now get a budget each, with an explicit timeout below the platform cap so an
+  overrun fails loudly instead of vanishing.
 - The test helper that gives each test its own database built the new DSN by splitting the old
   one on its last "/". For a server reached over a unix socket, whose socket directory rides in a
   `?host=` query parameter, that lands inside the path and appends the database name to the

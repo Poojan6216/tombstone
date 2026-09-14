@@ -48,6 +48,11 @@ jobs:
       fail-fast: false
       matrix:
         lineage: [sqlite, postgres]
+        # 3.11 is the floor the package advertises. Claiming it without running it is how a
+        # floor quietly stops being true; the oldest and newest supported versions both run.
+        python: ["3.11", "3.12"]
+        exclude:
+          - { lineage: postgres, python: "3.11" }   # the lineage backend is version-agnostic
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -59,7 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-        with: { python-version: "3.12" }
+        with: { python-version: "${{ matrix.python }}" }
       - run: uv sync --all-extras --group dev
       - name: pytest (SQLite/Postgres lineage × Chroma/FAISS/Qdrant-local, pgvector via the service)
         run: uv run pytest -q -m "not train and not slow" --cov=tombstone --cov-report=xml --timeout=1800
@@ -167,10 +172,15 @@ jobs:
       - run: uv sync --all-extras --group dev
       - run: uv run pytest -q tests/test_mcp.py
 
-  nightly-benchmark:
+  # These two ran as one job with timeout-minutes: 720, which GitHub silently ignores — a hosted
+  # job is killed at 6 hours whatever you ask for. The residue leg alone took 5h45m, so the
+  # unlearning leg was cancelled at epoch 18/20 every night for three nights and nobody noticed,
+  # because a cancelled job renders grey rather than red. They are independent, so they get a
+  # budget each, and an explicit timeout below the platform cap so an overrun fails loudly.
+  nightly-residue:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 720
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -178,8 +188,36 @@ jobs:
       - run: uv sync --all-extras --group dev
       - name: residue benchmark (chroma + faiss)
         run: uv run python bench/residue/run_residue.py --backends chroma,faiss --subjects 200
+      - uses: actions/upload-artifact@v4
+        with: { name: bench-residue, path: bench/results/residue-latest.json }
+
+  nightly-unlearn:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
       - name: 0.5B unlearning run
         run: uv run python bench/unlearn/run_unlearn.py --subjects 40
+      - uses: actions/upload-artifact@v4
+        with: { name: bench-unlearn, path: bench/results/unlearn-latest.json }
+
+  nightly-regression:
+    needs: [nightly-residue, nightly-unlearn]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { python-version: "3.12" }
+      - run: uv sync --all-extras --group dev
+      - uses: actions/download-artifact@v4
+        with: { name: bench-residue, path: bench/results }
+      - uses: actions/download-artifact@v4
+        with: { name: bench-unlearn, path: bench/results }
       - name: headline metrics must not regress beyond the committed thresholds
         run: uv run python bench/check_regression.py
       - uses: actions/upload-artifact@v4

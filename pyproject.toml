@@ -4,12 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tombstone-erase"
-version = "0.1.0"
+version = "0.1.1"
 description = "Track where a data subject's data actually went (chunks, embeddings, caches, fine-tuned weights), erase it everywhere, and hand back a receipt that says what was checked and what was not."
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 authors = [{ name = "Poojan Patel" }]
 keywords = ["gdpr", "erasure", "lineage", "rag", "vector-database", "unlearning"]
 classifiers = [
@@ -17,6 +17,7 @@ classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Topic :: Database",
@@ -109,7 +110,9 @@ include = ["src/tombstone", "LICENSE", "README.md", "CHANGELOG.md", "tombstone.y
 
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+# 3.11 is the floor, so lint at 3.11: this is what actually stops 3.12-only syntax being
+# written into a package that claims to install on 3.11.
+target-version = "py311"
 src = ["src", "tests", "bench"]
 
 [tool.ruff.lint]
@@ -137,7 +140,7 @@ ignore = [
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 strict = true
 warn_unreachable = true
 show_error_codes = true
